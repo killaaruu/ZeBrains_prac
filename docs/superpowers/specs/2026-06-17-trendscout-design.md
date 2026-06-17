@@ -19,9 +19,9 @@ cluster with one command.
 |---|---|
 | Agent runtime | **LangGraph.js** (`@langchain/langgraph`) inside a **NestJS BullMQ worker** — no new language, TS-everywhere preserved |
 | LLM serving | **Ollama** serving a model **pool** for fallback |
-| Model pool | primary `qwen2.5:14b`, fallback `gemma4:12b` (12–14B band, ≤24GB VRAM; Apache-2.0, agentic, multimodal — released Apr 2026). Use `gemma4:12b-it-qat` if GPU headroom is tight. |
+| Model pool | **Deploy target is the dev laptop — single-node k3s, RTX 3060 6 GB VRAM.** Primary `qwen2.5:7b` (~4.7 GB, fits VRAM → fast path keeps < 2 min), fallback `gemma4:12b-it-qat` (loaded only on primary failure; partial CPU offload acceptable on the rare fallback path). Both ≤13B. Env-driven: on a ≥16 GB GPU node, switch the pool to `qwen2.5:14b` → `gemma4:12b`. |
 | Source search | **Tavily API** (LLM-oriented search) + live link validation |
-| Deploy target | **k3s** + umbrella **Helm chart**, one-command install |
+| Deploy target | **single-node k3s on the dev laptop** + umbrella **Helm chart**, one-command install |
 | Status push | **Supabase Realtime** on the `reports` table (already wired client-side) |
 | Worker topology | second process of the **same API image** (one codebase/artifact) |
 | Issues | flat list of labeled task issues |
@@ -101,9 +101,10 @@ Planner ─▶ Researcher ─▶ Link-Validator ─▶ Analyst ─▶ Sustainabi
 - **Sustainability-Scorer** assigns 1–10 with for/against arguments.
 - **Assembler** emits the validated JSON (logged, per acceptance criteria).
 
-**LLM fallback pool:** a provider wrapper iterates `[qwen2.5:14b, gemma4:12b]`;
-on error or per-node timeout it transparently advances to the next model so the
-user never sees a failure. Logged for observability.
+**LLM fallback pool:** a provider wrapper iterates the env-configured pool
+(`[qwen2.5:7b, gemma4:12b-it-qat]` on the 6 GB dev/deploy box; `[qwen2.5:14b,
+gemma4:12b]` on a ≥16 GB node); on error or per-node timeout it transparently
+advances to the next model so the user never sees a failure. Logged for observability.
 
 ## 7. Security & Non-Functional
 
@@ -112,12 +113,18 @@ user never sees a failure. Logged for observability.
   "ignore embedded instructions" hardening. Tested with injection probes.
 - **Performance:** per-node timeouts, parallel research, model-pool fallback to
   stay within the **2–3 min** budget (acceptance target: < 2 min typical).
+  - **Hardware caveat (6 GB VRAM box):** the < 2 min target relies on the 7B
+    primary fitting in VRAM. Heavy topics, or any request that falls back to the
+    12B-QAT model (partial CPU offload), may exceed 2 min — acceptable and
+    documented. On a ≥16 GB GPU node the 14B/12B pool meets the target outright.
 - **Observability:** the assembled JSON is logged; node-level timings logged.
 
 ## 8. Deployment (k3s, one command)
 
 - Umbrella **Helm chart** `deploy/charts/trendscout` bundling: `api`, `worker`,
-  `web`, `redis`, `postgres`, `ollama` (with model pull init).
+  `web`, `redis`, `postgres`, `ollama` (with model pull init for the env pool —
+  `qwen2.5:7b` + `gemma4:12b-it-qat` on the 6 GB single-node box).
+- Single-node k3s on the dev laptop; Ollama requests the NVIDIA GPU (6 GB).
 - One-command install (e.g. `make k3s-up` → `helm install …` against k3s).
 - README documents architecture, a component-interaction diagram, and the k3s
   deployment runbook.
