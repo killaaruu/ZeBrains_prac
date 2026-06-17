@@ -19,7 +19,7 @@ cluster with one command.
 |---|---|
 | Agent runtime | **LangGraph.js** (`@langchain/langgraph`) inside a **NestJS BullMQ worker** — no new language, TS-everywhere preserved |
 | LLM serving | **Ollama** serving a model **pool** for fallback |
-| Model pool | primary `qwen2.5:14b`, fallback `gemma3:12b` (12–14B band, ≤24GB VRAM) |
+| Model pool | primary `qwen2.5:14b`, fallback `gemma4:12b` (12–14B band, ≤24GB VRAM; Apache-2.0, agentic, multimodal — released Apr 2026). Use `gemma4:12b-it-qat` if GPU headroom is tight. |
 | Source search | **Tavily API** (LLM-oriented search) + live link validation |
 | Deploy target | **k3s** + umbrella **Helm chart**, one-command install |
 | Status push | **Supabase Realtime** on the `reports` table (already wired client-side) |
@@ -101,7 +101,7 @@ Planner ─▶ Researcher ─▶ Link-Validator ─▶ Analyst ─▶ Sustainabi
 - **Sustainability-Scorer** assigns 1–10 with for/against arguments.
 - **Assembler** emits the validated JSON (logged, per acceptance criteria).
 
-**LLM fallback pool:** a provider wrapper iterates `[qwen2.5:14b, gemma3:12b]`;
+**LLM fallback pool:** a provider wrapper iterates `[qwen2.5:14b, gemma4:12b]`;
 on error or per-node timeout it transparently advances to the next model so the
 user never sees a failure. Logged for observability.
 
