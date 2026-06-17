@@ -26,6 +26,8 @@ export type SupabaseRuntimeEnv = {
 };
 
 const PLACEHOLDER_SUPABASE_URL = "https://local-dev-placeholder.supabase.co";
+const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
+const DEFAULT_LLM_MODEL_POOL = "qwen2.5:7b,gemma4:12b-it-qat";
 
 function definedEntries(values: Record<string, string | undefined>): Record<string, string> {
   return Object.fromEntries(
@@ -73,6 +75,11 @@ export function buildRuntimeEnv(input: RuntimeEnvInput): RuntimeEnv {
     SUPABASE_STORAGE_URL: supabase.storageUrl,
     SUPABASE_WEBHOOK_SECRET: supabase.webhookSecret,
   });
+  const agentRuntimeEnv = definedEntries({
+    OLLAMA_BASE_URL: hostEnv.OLLAMA_BASE_URL ?? DEFAULT_OLLAMA_BASE_URL,
+    LLM_MODEL_POOL: hostEnv.LLM_MODEL_POOL ?? DEFAULT_LLM_MODEL_POOL,
+    TAVILY_API_KEY: hostEnv.TAVILY_API_KEY,
+  });
   const clientSupabaseEnv = definedEntries({
     VITE_SUPABASE_URL: supabaseUrl,
     VITE_SUPABASE_PUBLISHABLE_KEY: supabasePublishableKey,
@@ -90,6 +97,7 @@ export function buildRuntimeEnv(input: RuntimeEnvInput): RuntimeEnv {
       LOCAL_DEV_ADMIN_PASSWORD: adminPassword,
       LOCAL_DEV_ADMIN_AUTH_UID: localDevAdminAuthUid,
       ...apiSupabaseEnv,
+      ...agentRuntimeEnv,
     },
     web: {
       VITE_API_URL: apiUrl,
