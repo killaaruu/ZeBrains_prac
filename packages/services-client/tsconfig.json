@@ -1,0 +1,9 @@
+{
+  "extends": "@repo/config/typescript/react.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src"]
+}

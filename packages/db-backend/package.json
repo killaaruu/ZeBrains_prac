@@ -1,0 +1,30 @@
+{
+  "name": "@repo/db-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "generate": "drizzle-kit generate && biome check --write src/migrations",
+    "migrate": "drizzle-kit migrate",
+    "studio": "drizzle-kit studio",
+    "format": "biome check --write .",
+    "format:check": "biome check ."
+  },
+  "dependencies": {
+    "@repo/shared": "workspace:*",
+    "drizzle-orm": "^0.44",
+    "postgres": "^3"
+  },
+  "devDependencies": {
+    "@repo/config": "workspace:*",
+    "drizzle-kit": "^0.31",
+    "typescript": "^5"
+  }
+}

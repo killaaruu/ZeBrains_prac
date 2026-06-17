@@ -1,0 +1,181 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Bash(pnpm --filter *)",
+      "Bash(pnpm run *)",
+      "Bash(turbo *)",
+      "Bash(biome *)",
+      "Bash(npx *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git stash*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(git merge *)",
+      "Bash(git rebase *)",
+      "Bash(git switch *)",
+      "Bash(git restore *)",
+      "Bash(git cherry-pick *)",
+      "Bash(git tag *)",
+      "Bash(git show *)",
+      "Bash(git rev-parse *)",
+      "Bash(git remote *)",
+      "Bash(git config --get *)",
+      "Bash(git config --list*)",
+      "Bash(gh *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(find *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(echo *)",
+      "Bash(node *)",
+      "Bash(tsc *)",
+      "Bash(which *)",
+      "Bash(sort *)",
+      "Bash(uniq *)",
+      "Bash(diff *)",
+      "Bash(grep *)",
+      "Bash(tree *)",
+      "Bash(pwd)",
+      "Bash(curl *)",
+      "Bash(jq *)",
+      "Bash(xargs *)",
+      "Bash(touch *)",
+      "Bash(rm -rf node_modules)",
+      "Bash(rm -rf */node_modules)",
+      "Bash(rm -rf .turbo)",
+      "Bash(rm -rf dist)",
+      "Bash(rm -rf coverage)",
+      "Bash(rm -f *.tsbuildinfo)",
+      "Bash(rm *.tmp)",
+      "Bash(sed *)",
+      "Bash(chmod *)",
+      "Bash(date *)",
+      "Bash(basename *)",
+      "Bash(dirname *)",
+      "Bash(realpath *)",
+      "Bash(readlink *)",
+      "Bash(stat *)",
+      "Bash(tee *)",
+      "Bash(env)",
+      "Bash(printenv *)",
+      "Bash(sleep *)",
+      "Bash(kill *)",
+      "Bash(lsof *)",
+      "Bash(ps *)",
+      "mcp__chrome-devtools__*",
+      "mcp__context7__*",
+      "mcp__supabase__*"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf .)",
+      "Bash(pnpm publish*)",
+      "Bash(npm publish*)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push origin main*)",
+      "Bash(git push origin master*)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean -f*)",
+      "Bash(git branch -D *)",
+      "Bash(git checkout -- .)",
+      "Bash(curl * | bash*)",
+      "Bash(curl * | sh*)",
+      "Bash(rm -rf $HOME*)",
+      "Bash(kubectl delete *)",
+      "Bash(kubectl drain *)",
+      "Bash(kubectl cordon *)",
+      "Bash(kubectl uncordon *)",
+      "Bash(kubectl taint *)",
+      "Bash(kubectl replace --force *)",
+      "Bash(kubectl replace -f *--force*)",
+      "Bash(kubectl scale *--replicas=0*)",
+      "Bash(kubectl scale *--replicas 0*)",
+      "Bash(kubectl rollout undo *)",
+      "Bash(kubectl rollout restart *)",
+      "Bash(kubectl exec *)",
+      "Bash(kubectl apply --force *)",
+      "Bash(kubectl apply *--force*)",
+      "Bash(kubectl patch *)",
+      "Bash(kubectl edit *)",
+      "Bash(kubectl set *)",
+      "Bash(kubectl label *--overwrite*)",
+      "Bash(kubectl annotate *--overwrite*)",
+      "Bash(kubectl create *)",
+      "Bash(kubectl run *)",
+      "Bash(kubectl cp *)",
+      "Bash(kubectl port-forward *)",
+      "Bash(helm uninstall *)",
+      "Bash(helm delete *)",
+      "Bash(helm upgrade *--force*)",
+      "Bash(helm rollback *)",
+      "Bash(helm install *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/biome-format.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-migrations.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-git-operations.sh"
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-commit-message.sh"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-compact.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true
+  }
+}

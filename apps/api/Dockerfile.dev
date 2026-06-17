@@ -1,0 +1,30 @@
+FROM node:24-alpine
+
+RUN apk add --no-cache python3 make g++
+
+RUN corepack enable && corepack prepare pnpm@10.29.3 --activate
+
+WORKDIR /repo
+
+# Dependencies layer (cached)
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
+COPY apps/api/package.json                    apps/api/package.json
+COPY apps/web/package.json                    apps/web/package.json
+COPY packages/shared/package.json             packages/shared/package.json
+COPY packages/db-backend/package.json         packages/db-backend/package.json
+COPY packages/config/package.json             packages/config/package.json
+COPY packages/client-core/package.json        packages/client-core/package.json
+COPY packages/services-client/package.json    packages/services-client/package.json
+
+RUN pnpm install --frozen-lockfile --filter @repo/api...
+
+# Source
+COPY turbo.json turbo.json
+COPY apps/api/         apps/api/
+COPY packages/shared/  packages/shared/
+COPY packages/db-backend/ packages/db-backend/
+COPY packages/config/  packages/config/
+
+EXPOSE 3000
+
+CMD ["pnpm", "--filter", "@repo/api", "dev"]

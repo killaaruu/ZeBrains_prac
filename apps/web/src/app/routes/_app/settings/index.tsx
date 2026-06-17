@@ -1,0 +1,10 @@
+import { createFileRoute } from "@tanstack/react-router";
+import SettingsProfile from "@/features/settings/profile";
+
+export const Route = createFileRoute("/_app/settings/")({
+  component: SettingsProfilePage,
+});
+
+function SettingsProfilePage() {
+  return <SettingsProfile />;
+}

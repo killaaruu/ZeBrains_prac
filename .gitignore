@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+.venv/
+
+# Build outputs
+dist/
+.next/
+out/
+__pycache__/
+*.py[cod]
+
+# Turborepo
+.turbo/
+.turbo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.local-env/
+supabase/.temp/
+deploy/.env.prod
+deploy/.env.vercel
+deploy/.secrets/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Testing
+coverage/
+
+# Claude Code local artifacts (logs, screenshots, lock files, per-user state)
+.claude/logs/
+.claude/screenshots/
+.claude/projects/
+.claude/memory/
+.claude/*.lock
+.claude/*.local.json
+.claude/settings.local.json
+# …but tracked skill scripts under .claude/ ARE checked in.
+!.claude/skills/*/scripts/
+!.claude/skills/*/scripts/**
+
+# Misc
+*.tsbuildinfo
+*.log
+*.timestamp-*.mjs
+.playwright-mcp/

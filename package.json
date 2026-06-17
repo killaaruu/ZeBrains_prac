@@ -1,0 +1,39 @@
+{
+  "name": "product-template",
+  "description": "Monorepo template for AI-first products (NestJS + React + Drizzle)",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.29.3",
+  "scripts": {
+    "dev": "turbo dev",
+    "local": "pnpm --filter @repo/local-env start",
+    "local:dev": "pnpm local dev",
+    "local:e2e": "pnpm local e2e",
+    "local:light": "pnpm local light",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "check": "turbo check",
+    "format": "turbo format",
+    "format:check": "turbo format:check"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@scarf/scarf",
+      "@swc/core",
+      "bufferutil",
+      "es5-ext",
+      "esbuild",
+      "msgpackr-extract",
+      "sharp",
+      "utf-8-validate"
+    ]
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
+    "turbo": "^2.8.7",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

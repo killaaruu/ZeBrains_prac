@@ -1,0 +1,42 @@
+{
+  "name": "@repo/system-board",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch.ts",
+    "generate": "tsx src/generator/index.ts",
+    "hash": "tsx src/generator/hash-module.ts",
+    "apply-docs": "tsx src/generator/apply-docs.ts",
+    "build": "tsx src/generator/index.ts && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsx src/generator/index.ts && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "biome check --write .",
+    "format:check": "biome check ."
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^1.1.4",
+    "@xyflow/react": "^12.3.5",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-markdown": "^10.1.0",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@repo/config": "workspace:*",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/node": "22.10.5",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "chokidar": "^4.0.1",
+    "jsdom": "^25.0.1",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "vite": "^6",
+    "vitest": "4.0.18"
+  }
+}

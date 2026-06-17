@@ -1,0 +1,55 @@
+name: ArgoCD wait with diagnostics
+description: >-
+  Install the argocd CLI, hard-refresh the app, and wait for it to converge
+  (health + sync + operation). On failure, dump the sync result and the
+  migration Job / app pod logs so the real error lands in the CI log instead of
+  an opaque timeout.
+
+inputs:
+  app-name:
+    description: ArgoCD application name to wait on.
+    required: true
+  argocd-server:
+    description: ArgoCD server address (ARGOCD_SERVER).
+    required: true
+  argocd-token:
+    description: ArgoCD auth token (ARGOCD_AUTH_TOKEN).
+    required: true
+  timeout:
+    description: Seconds to wait for convergence before failing.
+    required: false
+    default: "600"
+
+runs:
+  using: composite
+  steps:
+    - name: Install ArgoCD CLI
+      shell: bash
+      run: |
+        sudo curl -sSL -o /usr/local/bin/argocd \
+          https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        sudo chmod +x /usr/local/bin/argocd
+
+    - name: Refresh ArgoCD app and wait for health
+      shell: bash
+      # Pass inputs via env (not ${{ }} interpolation in the script) to keep the
+      # run body free of expansion.
+      env:
+        ARGOCD_SERVER: ${{ inputs.argocd-server }}
+        ARGOCD_AUTH_TOKEN: ${{ inputs.argocd-token }}
+        APP: ${{ inputs.app-name }}
+        TIMEOUT: ${{ inputs.timeout }}
+      run: |
+        argocd app get "$APP" --grpc-web --hard-refresh
+        if ! argocd app wait "$APP" --grpc-web \
+          --health --sync --operation \
+          --timeout "$TIMEOUT"; then
+          echo "::error::ArgoCD sync did not converge — dumping diagnostics"
+          echo "===== app state (sync result + resource health) ====="
+          argocd app get "$APP" --grpc-web --show-operation || true
+          echo "===== migration Job logs (migration-failure mode) ====="
+          argocd app logs "$APP" --grpc-web --kind Job --tail 200 || true
+          echo "===== app pod logs (pod-not-Ready / health-failure mode) ====="
+          argocd app logs "$APP" --grpc-web --kind Deployment --tail 100 || true
+          exit 1
+        fi

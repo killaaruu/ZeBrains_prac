@@ -1,0 +1,124 @@
+# Generic GitOps + ArgoCD deploy pipeline (production).
+# See deploy-staging.yml for the full list of required GitHub variables/secrets.
+# Production uses the *-prod variants: GITOPS_VALUES_PATH_PROD, ARGOCD_APP_PROD,
+# VERCEL_WEB_PROJECT_ID_PROD.
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ${{ vars.CONTAINER_REGISTRY }}/api
+
+jobs:
+  build-api:
+    name: Build & push API image
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: tag
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.CONTAINER_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build & push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-prod
+          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache-prod,mode=max
+
+  deploy-api:
+    name: Deploy API via ArgoCD
+    runs-on: ubuntu-latest
+    needs: build-api
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Checkout gitops repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Bump image tag in gitops
+        env:
+          NEW_TAG: ${{ needs.build-api.outputs.image_tag }}
+          VALUES_PATH: ${{ vars.GITOPS_VALUES_PATH_PROD }}
+        working-directory: gitops
+        run: |
+          set -euo pipefail
+          export TAG="$NEW_TAG"
+          yq -i '.image.tag = strenv(TAG)' "$VALUES_PATH"
+          if git diff --quiet; then
+            echo "No changes to $VALUES_PATH (already at $NEW_TAG)"
+          else
+            git config user.name "${{ vars.CI_GIT_USER }}"
+            git config user.email "${{ vars.CI_GIT_EMAIL }}"
+            git add "$VALUES_PATH"
+            git commit -m "chore(prod): bump api to $NEW_TAG"
+            git push
+          fi
+
+      - name: Wait for ArgoCD sync & health
+        uses: ./.github/actions/argocd-wait
+        with:
+          app-name: ${{ vars.ARGOCD_APP_PROD }}
+          argocd-server: ${{ secrets.ARGOCD_SERVER }}
+          argocd-token: ${{ secrets.ARGOCD_TOKEN }}
+
+  vercel-web:
+    name: Vercel — web (production)
+    runs-on: ubuntu-latest
+    if: ${{ vars.VERCEL_WEB_PROJECT_ID_PROD != '' }}
+    timeout-minutes: 10
+    env:
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_WEB_PROJECT_ID_PROD }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Pull Vercel project
+        working-directory: apps/web
+        run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build
+        working-directory: apps/web
+        run: npx vercel build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy
+        working-directory: apps/web
+        run: npx vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"

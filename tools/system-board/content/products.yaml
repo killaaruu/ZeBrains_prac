@@ -1,0 +1,10 @@
+products:
+  - id: example
+    title: Example Product
+    tagline: A starter domain for the template
+    status: mvp
+    slugs: [example]
+    integrations:
+      - { target: supabase, kind: auth }
+externalSystems:
+  - { id: supabase, title: Supabase }

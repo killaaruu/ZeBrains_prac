@@ -1,0 +1,25 @@
+node_modules
+.git
+.turbo
+.env*
+
+# Packages not needed for API build at runtime, but their package.json must be
+# visible to pnpm so `pnpm install --frozen-lockfile` can resolve the workspace.
+packages/client-core
+!packages/client-core/package.json
+packages/services-client
+!packages/services-client/package.json
+
+# Test & tooling artifacts
+**/*.test.ts
+**/*.spec.ts
+**/test/
+**/coverage/
+**/__tests__/
+**/vitest*.config.*
+
+# IDE & OS
+.vscode
+.idea
+.DS_Store
+*.log

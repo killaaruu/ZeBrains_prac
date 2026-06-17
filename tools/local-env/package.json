@@ -1,0 +1,23 @@
+{
+  "name": "@repo/local-env",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "biome check --write .",
+    "format:check": "biome check ."
+  },
+  "dependencies": {
+    "postgres": "3.4.8",
+    "tsx": "4.21.0"
+  },
+  "devDependencies": {
+    "@repo/config": "workspace:*",
+    "@types/node": "22.10.5",
+    "typescript": "5.9.3",
+    "vitest": "4.0.18"
+  }
+}

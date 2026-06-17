@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches-ignore: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Format, Typecheck, Test & Build
+    # Skip the duplicate `pull_request` run when the PR is from a branch in
+    # the same repo — `push` already covers it. Only fork PRs need the
+    # dedicated `pull_request` trigger.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate (format, typecheck, test, build)
+        run: pnpm turbo check

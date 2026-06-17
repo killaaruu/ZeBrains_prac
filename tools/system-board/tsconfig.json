@@ -1,0 +1,11 @@
+{
+  "extends": "@repo/config/typescript/react.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "watch.ts", "vite.config.ts", "vitest.setup.ts"]
+}

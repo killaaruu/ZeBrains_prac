@@ -1,0 +1,75 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile.dev
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-3111}:3000"
+    env_file:
+      - ./apps/api/.env
+    environment:
+      REDIS_URL: redis://redis:6379
+      PORT: "3000"
+      # Absolute path to migrations inside the dev container (see ADR-002).
+      # The prod Dockerfile sets this via ENV instead.
+      MIGRATIONS_DIR: /repo/packages/db-backend/src/migrations
+    depends_on:
+      redis:
+        condition: service_healthy
+    develop:
+      watch:
+        # API source — sync, NestJS --watch recompiles
+        - action: sync
+          path: ./apps/api/src
+          target: /repo/apps/api/src
+
+        # Workspace packages — sync, webpack bundles them inline
+        - action: sync
+          path: ./packages/shared/src
+          target: /repo/packages/shared/src
+
+        - action: sync
+          path: ./packages/db-backend/src
+          target: /repo/packages/db-backend/src
+
+        # Config changes — need container restart
+        - action: sync+restart
+          path: ./apps/api/nest-cli.json
+          target: /repo/apps/api/nest-cli.json
+
+        - action: sync+restart
+          path: ./apps/api/tsconfig.json
+          target: /repo/apps/api/tsconfig.json
+
+        - action: sync+restart
+          path: ./apps/api/webpack.config.js
+          target: /repo/apps/api/webpack.config.js
+
+        # Dependency changes — full rebuild
+        - action: rebuild
+          path: ./pnpm-lock.yaml
+
+        - action: rebuild
+          path: ./apps/api/package.json
+
+volumes:
+  redis_data:
