@@ -1,3 +1,4 @@
 e2e/test-results/
 *.d.ts
+!src/vite-env.d.ts
 .vercel

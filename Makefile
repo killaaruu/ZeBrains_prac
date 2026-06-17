@@ -4,7 +4,7 @@
 #   make            → list every target (same as `make help`)
 #   make <target>   → run it; each target prints a status line
 #
-# Aggregate tasks run through Turborepo; per-package tasks through `pnpm --filter`.
+# Aggregate tasks run through turborepo; per-package tasks through `pnpm --filter`.
 # Scope test / typecheck / build to one workspace with PKG=<name>:
 #     make test PKG=@repo/api
 # Each target is documented by the `## ...` comment after it (consumed by `make help`).
@@ -50,13 +50,13 @@ local-light: ## 💡  Light local env: api + web vs cloud config (apps/api/.env)
 	@printf "💡  Booting the light local environment (cloud config, redis only)...\n"
 	pnpm local:light
 
-dev: ## 🚀  Start all apps in dev mode (Turbo)
+dev: ## 🚀  Start all apps in dev mode (pnpm turbo)
 	@printf "🚀  Starting all apps in dev mode...\n"
 	pnpm dev
 
 web: ## 🌐  Start only the web app
 	@printf "🌐  Starting the web app...\n"
-	turbo dev --filter @repo/web
+	pnpm turbo dev --filter @repo/web
 
 local-e2e: ## 🧪  Run the API e2e suite on the prepared local environment
 	@printf "🧪  Running API e2e on the prepared local environment...\n"
@@ -74,38 +74,38 @@ local-run: ## ▶️   Run CMD against the prepared local env: make local-run CM
 
 check: ## ✅  Full validation pipeline (format + typecheck + test + build)
 	@printf "✅  Running full validation (format + typecheck + test + build)...\n"
-	turbo check
+	pnpm turbo check
 	@printf "🎉  All checks passed.\n"
 
 gate: ## 🚦  Pre-push gate — format, then full validation
 	@printf "🚦  Pre-push gate: formatting, then validating...\n"
-	turbo format
-	turbo check
+	pnpm turbo format
+	pnpm turbo check
 	@printf "🎉  Pre-push gate green — safe to push.\n"
 
 typecheck: ## 🔎  Type-check all packages (or PKG=<name>)
 	@printf "🔎  Type-checking %s...\n" "$(if $(PKG),$(PKG),all packages)"
-	turbo typecheck $(FILTER)
+	pnpm turbo typecheck $(FILTER)
 	@printf "✅  Types OK.\n"
 
 test: ## 🧪  Run tests for all packages (or PKG=<name>)
 	@printf "🧪  Running tests for %s...\n" "$(if $(PKG),$(PKG),all packages)"
-	turbo test $(FILTER)
+	pnpm turbo test $(FILTER)
 	@printf "✅  Tests passed.\n"
 
 build: ## 🏗️   Build all packages (or PKG=<name>)
 	@printf "🏗️   Building %s...\n" "$(if $(PKG),$(PKG),all packages)"
-	turbo build $(FILTER)
+	pnpm turbo build $(FILTER)
 	@printf "✅  Build complete.\n"
 
-format: ## 🎨  Format + lint with auto-fix (Biome via Turbo)
+format: ## 🎨  Format + lint with auto-fix (Biome via pnpm turbo)
 	@printf "🎨  Formatting and auto-fixing lint...\n"
-	turbo format
+	pnpm turbo format
 	@printf "✅  Code formatted.\n"
 
 format-check: ## 🎯  Format + lint, check only (no writes)
 	@printf "🎯  Checking formatting and lint...\n"
-	turbo format:check
+	pnpm turbo format:check
 	@printf "✅  Formatting clean.\n"
 
 # ----- Database (Drizzle ORM) -------------------------------------------------

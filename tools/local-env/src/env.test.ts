@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildLightRuntimeEnv, buildRuntimeEnv } from "./env";
 
@@ -18,7 +19,7 @@ describe("buildRuntimeEnv", () => {
 
     expect(env.api.PORT).toBe("4011");
     expect(env.api.DATABASE_URL).toBe("postgresql://app:app@127.0.0.1:45432/app_local");
-    expect(env.api.MIGRATIONS_DIR).toBe("/repo/packages/db-backend/src/migrations");
+    expect(env.api.MIGRATIONS_DIR).toBe(resolve("/repo", "packages/db-backend/src/migrations"));
     expect(env.api.REDIS_URL).toBe("redis://127.0.0.1:46380");
     expect(env.api.LOCAL_DEV_AUTH_ENABLED).toBe("true");
     expect(env.api.LOCAL_DEV_ADMIN_AUTH_UID).toBe("00000000-0000-4000-8000-000000000001");
@@ -77,6 +78,30 @@ describe("buildRuntimeEnv", () => {
     expect(env.api.LOCAL_DEV_ADMIN_PASSWORD).toBe("Password123!");
     expect(env.web.VITE_SUPABASE_URL).toBe("https://project.supabase.co");
     expect(env.web.VITE_SUPABASE_PUBLISHABLE_KEY).toBe("sb_publishable_real");
+  });
+
+  it("wires TrendScout agent runtime defaults into the API environment", () => {
+    const env = buildRuntimeEnv(makeRuntimeInput());
+
+    expect(env.api.OLLAMA_BASE_URL).toBe("http://localhost:11434");
+    expect(env.api.LLM_MODEL_POOL).toBe("qwen2.5:7b,gemma4:12b-it-qat");
+    expect(env.api.TAVILY_API_KEY).toBeUndefined();
+  });
+
+  it("lets host environment override TrendScout agent runtime values", () => {
+    const env = buildRuntimeEnv(
+      makeRuntimeInput({
+        hostEnv: {
+          OLLAMA_BASE_URL: "http://ollama.internal:11434",
+          LLM_MODEL_POOL: "qwen2.5:14b,gemma4:12b",
+          TAVILY_API_KEY: "tvly-local-dev",
+        },
+      }),
+    );
+
+    expect(env.api.OLLAMA_BASE_URL).toBe("http://ollama.internal:11434");
+    expect(env.api.LLM_MODEL_POOL).toBe("qwen2.5:14b,gemma4:12b");
+    expect(env.api.TAVILY_API_KEY).toBe("tvly-local-dev");
   });
 });
 

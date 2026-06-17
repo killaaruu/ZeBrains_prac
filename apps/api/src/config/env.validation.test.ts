@@ -50,6 +50,28 @@ describe("validateEnv", () => {
     expect(result.REDIS_URL).toBe("redis://localhost:6379");
   });
 
+  it("should default the LLM pool to the 6 GB VRAM deployment profile", () => {
+    const result = validateEnv(baseEnv);
+    expect(result.LLM_MODEL_POOL).toBe("qwen2.5:7b,gemma4:12b-it-qat");
+  });
+
+  it("should accept Ollama and Tavily agent runtime configuration", () => {
+    const result = validateEnv({
+      ...baseEnv,
+      LLM_MODEL_POOL: "qwen2.5:14b,gemma4:12b",
+      OLLAMA_BASE_URL: "http://localhost:11434",
+      TAVILY_API_KEY: "tvly-dev-example",
+    });
+
+    expect(result.LLM_MODEL_POOL).toBe("qwen2.5:14b,gemma4:12b");
+    expect(result.OLLAMA_BASE_URL).toBe("http://localhost:11434");
+    expect(result.TAVILY_API_KEY).toBe("tvly-dev-example");
+  });
+
+  it("should reject an empty LLM model pool", () => {
+    expect(() => validateEnv({ ...baseEnv, LLM_MODEL_POOL: " , " })).toThrow("LLM_MODEL_POOL");
+  });
+
   it("should pass through unknown variables via passthrough", () => {
     const result = validateEnv({ ...baseEnv, RANDOM_VAR: "hello" });
     expect(result.RANDOM_VAR).toBe("hello");
