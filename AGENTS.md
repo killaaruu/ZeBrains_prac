@@ -68,9 +68,13 @@ CPU offload — slower; the "< 2 min" target may not hold locally. The ≤13B an
 < 2 min requirements are about the **deployed** system on proper GPU hardware,
 NOT this dev laptop.
 
-Therefore make `LLM_MODEL_POOL` env-driven, with two profiles:
-- **Local dev (this laptop):** a fast 7–8B model that fits 6 GB, e.g.
-  `qwen2.5:7b` (~4.7 GB), optionally `gemma4:12b-it-qat` as the second. Goal:
-  fast iteration; don't block on speed.
-- **Deployment / k3s (the spec's required pool):** `qwen2.5:14b` → `gemma4:12b`,
-  on a GPU node with ≥16 GB VRAM. Do NOT assume the dev laptop GPU for the cluster.
+**k3s for this project runs on this same laptop (single node, 6 GB GPU)** — so
+the dev box IS the deploy target. Make `LLM_MODEL_POOL` env-driven:
+- **Default (this 6 GB box):** primary `qwen2.5:7b` (~4.7 GB, fits VRAM → keeps
+  the < 2 min target on the hot path), fallback `gemma4:12b-it-qat` (loaded only
+  on primary failure; partial CPU offload acceptable there). Both ≤13B.
+- **If a ≥16 GB GPU node is used later:** switch the pool via env to
+  `qwen2.5:14b` → `gemma4:12b`. No code change — just the env var.
+
+Honesty caveat: on 6 GB, heavy topics or any fallback to the 12B-QAT model may
+exceed 2 min. That is expected and should be documented, not hidden.
