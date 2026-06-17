@@ -36,6 +36,17 @@ ollama list                       # проверить
 ```
 Пул задаётся в `apps/api/.env` → `LLM_MODEL_POOL=qwen2.5:7b,gemma4:12b-it-qat`.
 
+### Vercel (фронт, для M6 / issue #31)
+1. Аккаунт на vercel.com → New Project → импортировать этот репо, root = `apps/web`.
+2. Vercel выдаст **Org ID** и **Project ID** (Project Settings → General).
+3. Создать токен: vercel.com → Account Settings → Tokens.
+4. В GitHub репо (`Settings → Secrets and variables → Actions`) добавить:
+   - secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`
+   - vars: `VERCEL_WEB_PROJECT_ID`, `VERCEL_WEB_PROJECT_ID_PROD`
+5. На Vercel задать env проекта: `VITE_API_URL` (→ URL API из k3s), `VITE_SUPABASE_URL`,
+   `VITE_SUPABASE_PUBLISHABLE_KEY`.
+6. Дальше деплой фронта делают существующие `deploy-staging.yml` / `deploy-prod.yml`.
+
 ### WSL2 + k3s (для M6)
 ```powershell
 # 1. включить systemd в Ubuntu-24.04
@@ -70,8 +81,13 @@ M2  #2 → #3                таблица reports → миграция; общ
 M3  #4, #5, #6             reports API · BullMQ-продюсер · изоляция по JWT     (нужны #2,#3)
 M4  #7 → #8 → {#10,#11,#12,#13} → #9 → #14,#15      агентный граф              (нужен M3)
 M5  #16 → #17 → {#18,#19,#20,#21}                   фронтенд                   (нужны M3, частично M4)
-M6  #22 → #23 → #24        Helm Ollama/Redis/PG · umbrella k3s · README        (нужно всё)
+M6  #22 → #23 → #24        Helm Ollama/Redis/PG · umbrella k3s (api+worker) · README   (нужно всё)
+M6  #31                    web → Vercel                                                 (фронт, парал. к k3s)
 ```
+
+**Scope деплоя (решено):** бэк (api+worker+infra) — на k3s (WSL2) одной командой;
+фронт (`apps/web`) — на **Vercel**. Полный GitOps/ArgoCD CD — НЕ делаем (избыточно
+для ноута; workflows `deploy-*.yml` остаются неиспользованными без инфра-секретов).
 
 Что отдаёт каждый слой:
 - **M1** — переменные окружения (Ollama, Tavily, пул).
@@ -204,6 +220,10 @@ make check      # format + typecheck + test + build — должно быть з
 ```
 Codex делает ровно то, что в `AGENTS.md`/промпте — если «забыл» про TDD или гейт,
 напомни «следуй AGENTS.md» или зови задачу через `/impl-issue`.
+
+**MCP в Codex:** подключены `context7` (доки библиотек) и `supabase` (работа с
+проектом Supabase — авторизация при первом обращении). Проверь, что оба видны в
+списке MCP сессии; при первом вызове Supabase Codex попросит залогиниться.
 
 ---
 
