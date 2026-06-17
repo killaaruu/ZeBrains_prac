@@ -57,3 +57,20 @@ k3s via Helm.
 ## Honesty
 Report outcomes faithfully. If tests fail, say so with the real output. Never
 claim "done" or "passing" without showing the green command output.
+
+## Local hardware profile (the developer's machine)
+- OS: Windows 11 Pro · CPU: Intel i5-10500H (6c/12t) · RAM: 32 GB
+- GPU: **NVIDIA RTX 3060 Laptop — 6 GB VRAM** (driver 610.x)
+
+**Implication for the LLM pool.** 6 GB VRAM does **not** fit a 12–14B model at Q4
+(`qwen2.5:14b` ≈ 9 GB, `gemma4:12b` ≈ 7 GB). On this machine they run with partial
+CPU offload — slower; the "< 2 min" target may not hold locally. The ≤13B and
+< 2 min requirements are about the **deployed** system on proper GPU hardware,
+NOT this dev laptop.
+
+Therefore make `LLM_MODEL_POOL` env-driven, with two profiles:
+- **Local dev (this laptop):** a fast 7–8B model that fits 6 GB, e.g.
+  `qwen2.5:7b` (~4.7 GB), optionally `gemma4:12b-it-qat` as the second. Goal:
+  fast iteration; don't block on speed.
+- **Deployment / k3s (the spec's required pool):** `qwen2.5:14b` → `gemma4:12b`,
+  on a GPU node with ≥16 GB VRAM. Do NOT assume the dev laptop GPU for the cluster.
