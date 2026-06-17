@@ -11,6 +11,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "generate": "drizzle-kit generate && biome check --write src/migrations",
     "migrate": "drizzle-kit migrate",
     "studio": "drizzle-kit studio",
