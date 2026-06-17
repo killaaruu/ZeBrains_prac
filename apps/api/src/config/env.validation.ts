@@ -3,6 +3,13 @@ import { z } from "zod";
 
 const logger = new Logger("EnvValidation");
 
+export const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
+export const DEFAULT_LLM_MODEL_POOL = "qwen2.5:7b,gemma4:12b-it-qat";
+
+const emptyStringToUndefined = (value: unknown) => (value === "" ? undefined : value);
+const optionalString = z.preprocess(emptyStringToUndefined, z.string().optional());
+const optionalUrl = z.preprocess(emptyStringToUndefined, z.string().url().optional());
+
 const envSchema = z
   .object({
     // Required
@@ -12,32 +19,55 @@ const envSchema = z
     PORT: z.string().optional(),
 
     // Optional — Supabase Auth (JWKS verification; HMAC fallback)
-    SUPABASE_URL: z.string().url().optional(),
-    SUPABASE_JWT_SECRET: z.string().optional(),
-    SUPABASE_WEBHOOK_SECRET: z.string().optional(),
+    SUPABASE_URL: optionalUrl,
+    SUPABASE_JWT_SECRET: optionalString,
+    SUPABASE_WEBHOOK_SECRET: optionalString,
 
     // Optional — Supabase Storage.
     // Uses the publishable/secret key pair, see
     // https://supabase.com/docs/guides/getting-started/api-keys.
-    SUPABASE_STORAGE_URL: z.string().url().optional(),
-    SUPABASE_PUBLISHABLE_KEY: z
-      .string()
-      .regex(/^(sb_publishable_|$)/, "Must start with sb_publishable_")
-      .optional(),
-    SUPABASE_SECRET_KEY: z
-      .string()
-      .regex(/^(sb_secret_|$)/, "Must start with sb_secret_")
-      .optional(),
+    SUPABASE_STORAGE_URL: optionalUrl,
+    SUPABASE_PUBLISHABLE_KEY: z.preprocess(
+      emptyStringToUndefined,
+      z
+        .string()
+        .regex(/^sb_publishable_/, "Must start with sb_publishable_")
+        .optional(),
+    ),
+    SUPABASE_SECRET_KEY: z.preprocess(
+      emptyStringToUndefined,
+      z
+        .string()
+        .regex(/^sb_secret_/, "Must start with sb_secret_")
+        .optional(),
+    ),
 
     // Optional — Redis (BullMQ task queue)
-    REDIS_URL: z.string().url().optional(),
+    REDIS_URL: optionalUrl,
+
+    // Optional - Agent runtime (TrendScout)
+    OLLAMA_BASE_URL: z.preprocess(
+      emptyStringToUndefined,
+      z.string().url().default(DEFAULT_OLLAMA_BASE_URL),
+    ),
+    LLM_MODEL_POOL: z.preprocess(
+      emptyStringToUndefined,
+      z
+        .string()
+        .default(DEFAULT_LLM_MODEL_POOL)
+        .refine(
+          (value) => value.split(",").every((model) => model.trim().length > 0),
+          "Must be a comma-separated list of model names",
+        ),
+    ),
+    TAVILY_API_KEY: optionalString,
 
     // Optional — Read replica
-    DATABASE_READONLY_URL: z.string().optional(),
+    DATABASE_READONLY_URL: optionalString,
 
     // Optional — build metadata
-    GIT_SHA: z.string().optional(),
-    GIT_BRANCH: z.string().optional(),
+    GIT_SHA: optionalString,
+    GIT_BRANCH: optionalString,
   })
   .passthrough();
 
