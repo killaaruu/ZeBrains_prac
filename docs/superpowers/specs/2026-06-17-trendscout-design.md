@@ -125,6 +125,16 @@ advances to the next model so the user never sees a failure. Logged for observab
   `web`, `redis`, `postgres`, `ollama` (with model pull init for the env pool —
   `qwen2.5:7b` + `gemma4:12b-it-qat` on the 6 GB single-node box).
 - Single-node k3s on the dev laptop; Ollama requests the NVIDIA GPU (6 GB).
+- **k3s runtime: WSL2 (Ubuntu).** k3s is Linux-only; it runs in its own WSL
+  distro (not the Docker Desktop distros), so it does not conflict with Docker.
+  Requirements/notes for the runbook:
+  - Enable systemd in that distro (`/etc/wsl.conf` → `[boot] systemd=true`, then
+    `wsl --shutdown`) so k3s starts as a service.
+  - GPU: the RTX 3060 is exposed in WSL2 via the NVIDIA CUDA-on-WSL driver; the
+    Ollama pod needs the NVIDIA device plugin (k3s) to claim it.
+  - Networking: WSL service ports are not always auto-forwarded to Windows
+    `localhost` — expose via `kubectl port-forward` (or the WSL IP) in the
+    one-command flow.
 - One-command install (e.g. `make k3s-up` → `helm install …` against k3s).
 - README documents architecture, a component-interaction diagram, and the k3s
   deployment runbook.
