@@ -21,7 +21,7 @@ cluster with one command.
 | LLM serving | **Ollama** serving a model **pool** for fallback |
 | Model pool | **Deploy target is the dev laptop — single-node k3s, RTX 3060 6 GB VRAM.** Primary `qwen2.5:7b` (~4.7 GB, fits VRAM → fast path keeps < 2 min), fallback `gemma4:12b-it-qat` (loaded only on primary failure; partial CPU offload acceptable on the rare fallback path). Both ≤13B. Env-driven: on a ≥16 GB GPU node, switch the pool to `qwen2.5:14b` → `gemma4:12b`. |
 | Source search | **Tavily API** (LLM-oriented search) + live link validation |
-| Deploy target | **single-node k3s on the dev laptop** + umbrella **Helm chart**, one-command install |
+| Deploy target | API + worker + infra on **single-node k3s (WSL2) on the dev laptop** (umbrella Helm chart, one command); **web app → Vercel** (per the template's CI deploy workflow) |
 | Status push | **Supabase Realtime** on the `reports` table (already wired client-side) |
 | Worker topology | second process of the **same API image** (one codebase/artifact) |
 | Issues | flat list of labeled task issues |
@@ -122,8 +122,13 @@ advances to the next model so the user never sees a failure. Logged for observab
 ## 8. Deployment (k3s, one command)
 
 - Umbrella **Helm chart** `deploy/charts/trendscout` bundling: `api`, `worker`,
-  `web`, `redis`, `postgres`, `ollama` (with model pull init for the env pool —
+  `redis`, `postgres`, `ollama` (with model pull init for the env pool —
   `qwen2.5:7b` + `gemma4:12b-it-qat` on the 6 GB single-node box).
+- **Web app deploys to Vercel** (only the API is containerized — repo convention).
+  The existing `deploy-staging.yml` / `deploy-prod.yml` workflows already handle
+  the Vercel deploy; needs `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_WEB_PROJECT_ID`
+  in GitHub secrets/vars, and the web env (`VITE_API_URL` → the k3s-exposed API,
+  `VITE_SUPABASE_*`).
 - Single-node k3s on the dev laptop; Ollama requests the NVIDIA GPU (6 GB).
 - **k3s runtime: WSL2 (Ubuntu).** k3s is Linux-only; it runs in its own WSL
   distro (not the Docker Desktop distros), so it does not conflict with Docker.
@@ -155,5 +160,6 @@ advances to the next model so the user never sees a failure. Logged for observab
 ## 10. Out of Scope (YAGNI)
 
 - No fine-tuning / no model training. No payment/billing. No multi-tenant orgs
-  beyond per-user isolation. No non-K8s production target. No SSE/WebSocket
-  layer (Supabase Realtime covers status).
+  beyond per-user isolation. No SSE/WebSocket layer (Supabase Realtime covers
+  status). No full GitOps/ArgoCD CD pipeline for the laptop demo (the bundled
+  `deploy-*.yml` workflows stay unused unless the infra secrets are provided).
