@@ -84,6 +84,8 @@ describe("ReportGenerationGraph", () => {
   it("runs the full report graph and logs the assembled JSON", async () => {
     const loggerSpy = vi.spyOn(Logger.prototype, "log").mockImplementation(() => {});
     const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
     const provider = {
       generate: vi
         .fn()
@@ -147,6 +149,10 @@ describe("ReportGenerationGraph", () => {
       expect.stringContaining("https://example.com/copilot"),
       expect.anything(),
     );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/copilot",
+      expect.objectContaining({ method: "HEAD", signal: expect.any(AbortSignal) }),
+    );
     expect(provider.generate).toHaveBeenNthCalledWith(
       3,
       expect.stringContaining("global_market"),
@@ -160,5 +166,185 @@ describe("ReportGenerationGraph", () => {
     expect(loggerSpy).toHaveBeenCalledWith(
       expect.stringContaining('"trend_name":"AI coding assistants"'),
     );
+  });
+
+  it("keeps only live URLs after HEAD and GET validation", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = { generate: vi.fn() };
+    const tavilyResearchService = { search: vi.fn() };
+    const graph = new ReportGenerationGraph(provider as never, tavilyResearchService as never);
+
+    const fetchMock = vi.fn(async (url: string, init?: { method?: string }) => {
+      if (url === "https://example.com/live-head") {
+        return { ok: true };
+      }
+
+      if (url === "https://example.com/live-get" && init?.method === "HEAD") {
+        return { ok: false };
+      }
+
+      if (url === "https://example.com/live-get" && init?.method === "GET") {
+        return { ok: true };
+      }
+
+      return { ok: false };
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      (
+        graph as unknown as {
+          validateLinks: (state: {
+            rawSources: Array<{ title: string; url: string; snippet: string }>;
+          }) => Promise<{
+            validatedSources: Array<{ title: string; url: string; snippet: string }>;
+          }>;
+        }
+      ).validateLinks({
+        rawSources: [
+          {
+            title: "Healthy HEAD response",
+            url: "https://example.com/live-head",
+            snippet: "HEAD should be enough.",
+          },
+          {
+            title: "GET fallback response",
+            url: "https://example.com/live-get",
+            snippet: "GET should rescue a non-live HEAD result.",
+          },
+          {
+            title: "Dead link",
+            url: "https://example.com/dead",
+            snippet: "Both HEAD and GET fail.",
+          },
+          {
+            title: "Invalid URL",
+            url: "not-a-url",
+            snippet: "Should be rejected before any network call.",
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      validatedSources: [
+        {
+          title: "Healthy HEAD response",
+          url: "https://example.com/live-head",
+          snippet: "HEAD should be enough.",
+        },
+        {
+          title: "GET fallback response",
+          url: "https://example.com/live-get",
+          snippet: "GET should rescue a non-live HEAD result.",
+        },
+      ],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/live-head",
+      expect.objectContaining({ method: "HEAD", signal: expect.any(AbortSignal) }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/live-get",
+      expect.objectContaining({ method: "HEAD", signal: expect.any(AbortSignal) }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/live-get",
+      expect.objectContaining({ method: "GET", signal: expect.any(AbortSignal) }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/dead",
+      expect.objectContaining({ method: "HEAD", signal: expect.any(AbortSignal) }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/dead",
+      expect.objectContaining({ method: "GET", signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("caps concurrent link checks to protect the report time budget", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = { generate: vi.fn() };
+    const tavilyResearchService = { search: vi.fn() };
+    const graph = new ReportGenerationGraph(provider as never, tavilyResearchService as never);
+
+    let activeRequests = 0;
+    let maxConcurrentRequests = 0;
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      activeRequests += 1;
+      maxConcurrentRequests = Math.max(maxConcurrentRequests, activeRequests);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      activeRequests -= 1;
+
+      return { ok: true };
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const rawSources = Array.from({ length: 7 }, (_, index) => ({
+      title: `Source ${index + 1}`,
+      url: `https://example.com/${index + 1}`,
+      snippet: "Concurrency probe",
+    }));
+
+    await (
+      graph as unknown as {
+        validateLinks: (state: {
+          rawSources: Array<{ title: string; url: string; snippet: string }>;
+        }) => Promise<{
+          validatedSources: Array<{ title: string; url: string; snippet: string }>;
+        }>;
+      }
+    ).validateLinks({ rawSources });
+
+    expect(maxConcurrentRequests).toBeLessThanOrEqual(3);
+    expect(fetchMock).toHaveBeenCalledTimes(rawSources.length);
+  });
+
+  it("drops links whose validation request times out", async () => {
+    vi.useFakeTimers();
+
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = { generate: vi.fn() };
+    const tavilyResearchService = { search: vi.fn() };
+    const graph = new ReportGenerationGraph(provider as never, tavilyResearchService as never);
+
+    const fetchMock = vi.fn(
+      (_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise<{ ok: boolean }>((resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+
+          setTimeout(() => resolve({ ok: true }), 5_000);
+        }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const validationPromise = (
+      graph as unknown as {
+        validateLinks: (state: {
+          rawSources: Array<{ title: string; url: string; snippet: string }>;
+        }) => Promise<{
+          validatedSources: Array<{ title: string; url: string; snippet: string }>;
+        }>;
+      }
+    ).validateLinks({
+      rawSources: [
+        {
+          title: "Slow source",
+          url: "https://example.com/slow",
+          snippet: "This source should time out.",
+        },
+      ],
+    });
+
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    await expect(validationPromise).resolves.toEqual({ validatedSources: [] });
+
+    vi.useRealTimers();
   });
 });
