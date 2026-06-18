@@ -31,6 +31,25 @@ function createDbMock(rows: unknown[] = []) {
   };
 }
 
+function collectColumnNames(value: unknown, seen = new WeakSet<object>()): string[] {
+  if (!value || typeof value !== "object") return [];
+  if (seen.has(value)) return [];
+  seen.add(value);
+
+  const record = value as Record<string, unknown>;
+  const names = typeof record.name === "string" ? [record.name] : [];
+
+  for (const child of Object.values(record)) {
+    if (Array.isArray(child)) {
+      names.push(...child.flatMap((item) => collectColumnNames(item, seen)));
+      continue;
+    }
+    names.push(...collectColumnNames(child, seen));
+  }
+
+  return names;
+}
+
 describe("mapReportRow", () => {
   it("maps a DB row to the shared report contract", () => {
     expect(mapReportRow(queuedRow)).toEqual({
@@ -85,7 +104,7 @@ describe("ReportsService", () => {
   });
 
   it("throws not found when a report is not owned by the current user", async () => {
-    const { db } = createDbMock([]);
+    const { db, fns } = createDbMock([]);
     const service = new ReportsService(db as never, queue as never);
 
     await expect(
@@ -94,5 +113,8 @@ describe("ReportsService", () => {
         "11111111-1111-4111-8111-111111111111",
       ),
     ).rejects.toThrow(NotFoundException);
+
+    const wherePredicate = (fns.selectWhere.mock.calls.at(0) as unknown[] | undefined)?.[0];
+    expect(collectColumnNames(wherePredicate)).toEqual(expect.arrayContaining(["id", "user_id"]));
   });
 });
