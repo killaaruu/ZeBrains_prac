@@ -68,6 +68,30 @@ vi.mock("@bull-board/nestjs", () => ({
   },
 }));
 
+vi.mock("@langchain/langgraph", () => {
+  const Annotation = () => ({});
+  Annotation.Root = () => ({ State: {} });
+
+  return {
+    Annotation,
+    END: "__end__",
+    START: "__start__",
+    StateGraph: class MockStateGraph {
+      addNode() {
+        return this;
+      }
+
+      addEdge() {
+        return this;
+      }
+
+      compile() {
+        return { invoke: vi.fn() };
+      }
+    },
+  };
+});
+
 vi.mock("@nestjs/schedule", () => ({
   Cron: () => (_target: unknown, _propertyKey: string, _descriptor: PropertyDescriptor) => {},
   CronExpression: {
@@ -87,6 +111,7 @@ import { HealthModule } from "./health/health.module";
 import { ExampleModule } from "./modules/example/example.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { QueueModule } from "./queue/queue.module";
+import { WorkerModule } from "./worker/worker.module";
 
 // nestjs-cls v6 ClsRootModule always injects HttpAdapterHost which isn't available
 // in Test.createTestingModule (no HTTP server). Replace RequestContextModule with a
@@ -180,6 +205,15 @@ describe("Module DI compilation", () => {
   it("ReportsModule compiles without DI errors", async () => {
     const module = await Test.createTestingModule({
       imports: [configModule(), ReportsModule],
+    }).compile();
+
+    expect(module).toBeDefined();
+    await module.close();
+  });
+
+  it("WorkerModule compiles without DI errors", async () => {
+    const module = await Test.createTestingModule({
+      imports: [configModule(), WorkerModule],
     }).compile();
 
     expect(module).toBeDefined();

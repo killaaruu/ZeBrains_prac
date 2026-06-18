@@ -8,6 +8,7 @@ module.exports = (options) => ({
   entry: {
     main: options.entry,
     migrate: "./src/migrate.ts",
+    worker: "./src/worker.ts",
   },
   output: {
     ...options.output,
