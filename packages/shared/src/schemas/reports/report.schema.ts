@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const ruMarketNotFound = "Реализации в РФ не обнаружено" as const;
+export const marketNotFound = "Не найдено" as const;
 
 export const reportMarketItemSchema = z.object({
   product: z.string().min(1),
@@ -19,10 +20,21 @@ export const reportSustainabilitySchema = z.object({
 
 export type ReportSustainability = z.infer<typeof reportSustainabilitySchema>;
 
+export const reportMarketItemsOrNotFoundSchema = z.union([
+  z.array(reportMarketItemSchema).min(1),
+  z.literal(marketNotFound),
+]);
+
+export const reportRuMarketSchema = z.union([
+  z.array(reportMarketItemSchema).min(1),
+  z.literal(ruMarketNotFound),
+  z.literal(marketNotFound),
+]);
+
 export const reportResultSchema = z.object({
   trend_name: z.string().min(1),
-  global_market: z.array(reportMarketItemSchema).min(1),
-  ru_market: z.union([z.array(reportMarketItemSchema).min(1), z.literal(ruMarketNotFound)]),
+  global_market: reportMarketItemsOrNotFoundSchema,
+  ru_market: reportRuMarketSchema,
   sustainability: reportSustainabilitySchema,
 });
 
