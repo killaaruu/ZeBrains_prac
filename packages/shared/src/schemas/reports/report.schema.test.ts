@@ -99,8 +99,20 @@ describe("createReportSchema", () => {
     });
   });
 
+  it("normalizes unicode and collapses extra whitespace", () => {
+    expect(createReportSchema.parse({ topic: "  AI\u00a0coding \n assistants  " })).toEqual({
+      topic: "AI coding assistants",
+    });
+  });
+
   it("rejects an empty topic", () => {
     expect(() => createReportSchema.parse({ topic: "" })).toThrow();
+  });
+
+  it("rejects control characters in the topic", () => {
+    expect(() => createReportSchema.parse({ topic: "AI coding\u0000assistants" })).toThrow(
+      /control characters/i,
+    );
   });
 });
 
