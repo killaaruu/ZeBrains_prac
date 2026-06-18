@@ -1,10 +1,13 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { Injectable, Logger } from "@nestjs/common";
 import {
+  marketNotFound,
+  type ReportMarketItem,
   type ReportResult,
   type ReportSustainability,
-  reportMarketItemSchema,
+  reportMarketItemsOrNotFoundSchema,
   reportResultSchema,
+  reportRuMarketSchema,
   reportSustainabilitySchema,
   ruMarketNotFound,
 } from "@repo/shared";
@@ -22,8 +25,8 @@ const plannerOutputSchema = z.array(z.string().trim().min(1)).min(1);
 
 const analysisSchema = z.object({
   trend_name: z.string().trim().min(1),
-  global_market: z.array(reportMarketItemSchema).min(1),
-  ru_market: z.union([z.array(reportMarketItemSchema).min(1), z.literal(ruMarketNotFound)]),
+  global_market: reportMarketItemsOrNotFoundSchema,
+  ru_market: reportRuMarketSchema,
 });
 
 type ReportAnalysis = z.infer<typeof analysisSchema>;
@@ -152,13 +155,21 @@ export class ReportGenerationGraph {
         "Analyst",
         "Split the validated evidence into global and Russia market findings.",
         "Return JSON with trend_name, global_market, and ru_market only.",
+        `If a market has no surviving sourced facts, return "${marketNotFound}" for that market.`,
+        `If Russia has no implementations at all, return "${ruMarketNotFound}" for ru_market.`,
         `Topic: ${state.topic}`,
         `Validated sources: ${JSON.stringify(state.validatedSources)}`,
       ].join("\n"),
       analysisSchema,
     );
 
-    return { analysis };
+    return {
+      analysis: {
+        trend_name: analysis.trend_name,
+        global_market: this.sanitizeMarketSection(analysis.global_market, state.validatedSources),
+        ru_market: this.sanitizeRuMarketSection(analysis.ru_market, state.validatedSources),
+      },
+    };
   }
 
   /**
@@ -253,6 +264,47 @@ export class ReportGenerationGraph {
 
   private isAbortError(error: unknown): boolean {
     return error instanceof DOMException && error.name === "AbortError";
+  }
+
+  private sanitizeMarketSection(
+    section: ReportAnalysis["global_market"],
+    validatedSources: readonly TavilySourceCandidate[],
+  ): ReportAnalysis["global_market"] {
+    if (section === marketNotFound) {
+      return marketNotFound;
+    }
+
+    const sanitizedItems = this.keepOnlyValidatedSources(section, validatedSources);
+    return sanitizedItems.length > 0 ? sanitizedItems : marketNotFound;
+  }
+
+  private sanitizeRuMarketSection(
+    section: ReportAnalysis["ru_market"],
+    validatedSources: readonly TavilySourceCandidate[],
+  ): ReportAnalysis["ru_market"] {
+    if (section === ruMarketNotFound || section === marketNotFound) {
+      return section;
+    }
+
+    const sanitizedItems = this.keepOnlyValidatedSources(section, validatedSources);
+    return sanitizedItems.length > 0 ? sanitizedItems : marketNotFound;
+  }
+
+  private keepOnlyValidatedSources(
+    items: readonly ReportMarketItem[],
+    validatedSources: readonly TavilySourceCandidate[],
+  ): ReportMarketItem[] {
+    const allowedUrls = new Set(validatedSources.map((source) => source.url));
+
+    return items.flatMap((item) => {
+      const sources = [...new Set(item.sources.filter((source) => allowedUrls.has(source)))];
+
+      if (sources.length === 0) {
+        return [];
+      }
+
+      return [{ ...item, sources }];
+    });
   }
 
   private async mapWithConcurrency<TInput, TOutput>(

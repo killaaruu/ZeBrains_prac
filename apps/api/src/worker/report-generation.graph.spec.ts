@@ -263,6 +263,165 @@ describe("ReportGenerationGraph", () => {
     );
   });
 
+  it("drops analyst items whose sources are not in the validated evidence and falls back honestly", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = {
+      generate: vi.fn().mockResolvedValue({
+        trend_name: "AI coding assistants",
+        global_market: [
+          {
+            product: "Copilot",
+            company: "GitHub",
+            effects: "Developer productivity gains",
+            sources: ["https://example.com/copilot", "https://example.com/invented"],
+          },
+          {
+            product: "Phantom AI",
+            company: "Imaginary Labs",
+            effects: "Unverified growth",
+            sources: ["https://example.com/phantom"],
+          },
+        ],
+        ru_market: [
+          {
+            product: "Local AI",
+            company: "Unknown",
+            effects: "No verified implementation",
+            sources: ["https://example.com/phantom-ru"],
+          },
+        ],
+      }),
+    };
+    const tavilyResearchService = { search: vi.fn() };
+    const graph = new ReportGenerationGraph(provider as never, tavilyResearchService as never);
+
+    await expect(
+      (
+        graph as unknown as {
+          analyze: (state: {
+            topic: string;
+            validatedSources: Array<{ title: string; url: string; snippet: string }>;
+          }) => Promise<{
+            analysis: {
+              trend_name: string;
+              global_market:
+                | string
+                | Array<{
+                    product: string;
+                    company: string;
+                    effects: string;
+                    sources: string[];
+                  }>;
+              ru_market:
+                | string
+                | Array<{
+                    product: string;
+                    company: string;
+                    effects: string;
+                    sources: string[];
+                  }>;
+            };
+          }>;
+        }
+      ).analyze({
+        topic: "AI coding assistants",
+        validatedSources: [
+          {
+            title: "GitHub Copilot momentum",
+            url: "https://example.com/copilot",
+            snippet: "Global usage continues to grow.",
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      analysis: {
+        trend_name: "AI coding assistants",
+        global_market: [
+          {
+            product: "Copilot",
+            company: "GitHub",
+            effects: "Developer productivity gains",
+            sources: ["https://example.com/copilot"],
+          },
+        ],
+        ru_market: "Не найдено",
+      },
+    });
+  });
+
+  it("preserves the explicit RU no-implementation literal from the analyst", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = {
+      generate: vi.fn().mockResolvedValue({
+        trend_name: "AI coding assistants",
+        global_market: [
+          {
+            product: "Copilot",
+            company: "GitHub",
+            effects: "Developer productivity gains",
+            sources: ["https://example.com/copilot"],
+          },
+        ],
+        ru_market: ruMarketNotFound,
+      }),
+    };
+    const tavilyResearchService = { search: vi.fn() };
+    const graph = new ReportGenerationGraph(provider as never, tavilyResearchService as never);
+
+    await expect(
+      (
+        graph as unknown as {
+          analyze: (state: {
+            topic: string;
+            validatedSources: Array<{ title: string; url: string; snippet: string }>;
+          }) => Promise<{
+            analysis: {
+              trend_name: string;
+              global_market:
+                | string
+                | Array<{
+                    product: string;
+                    company: string;
+                    effects: string;
+                    sources: string[];
+                  }>;
+              ru_market:
+                | string
+                | Array<{
+                    product: string;
+                    company: string;
+                    effects: string;
+                    sources: string[];
+                  }>;
+            };
+          }>;
+        }
+      ).analyze({
+        topic: "AI coding assistants",
+        validatedSources: [
+          {
+            title: "GitHub Copilot momentum",
+            url: "https://example.com/copilot",
+            snippet: "Global usage continues to grow.",
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      analysis: {
+        trend_name: "AI coding assistants",
+        global_market: [
+          {
+            product: "Copilot",
+            company: "GitHub",
+            effects: "Developer productivity gains",
+            sources: ["https://example.com/copilot"],
+          },
+        ],
+        ru_market: ruMarketNotFound,
+      },
+    });
+  });
+
   it("caps concurrent link checks to protect the report time budget", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = { generate: vi.fn() };

@@ -38,6 +38,17 @@ describe("reportResultSchema", () => {
     ).toBe("Реализации в РФ не обнаружено");
   });
 
+  it("accepts the explicit market not-found value when no sourced facts survive", () => {
+    const report = reportResultSchema.parse({
+      ...validReport,
+      global_market: "Не найдено",
+      ru_market: "Не найдено",
+    });
+
+    expect(report.global_market).toBe("Не найдено");
+    expect(report.ru_market).toBe("Не найдено");
+  });
+
   it("requires at least one source per market item", () => {
     expect(() =>
       reportResultSchema.parse({
