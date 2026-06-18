@@ -88,18 +88,6 @@ describe("ReportGenerationGraph", () => {
       generate: vi
         .fn()
         .mockResolvedValueOnce(["AI coding assistants market", "AI coding assistants Russia"])
-        .mockResolvedValueOnce([
-          {
-            title: "GitHub Copilot momentum",
-            url: "https://example.com/copilot",
-            snippet: "Global usage continues to grow.",
-          },
-          {
-            title: "Invalid source",
-            url: "not-a-url",
-            snippet: "This source should be dropped by validation.",
-          },
-        ])
         .mockResolvedValueOnce({
           trend_name: "AI coding assistants",
           global_market: [
@@ -119,8 +107,22 @@ describe("ReportGenerationGraph", () => {
         })
         .mockResolvedValueOnce(generatedReport),
     };
+    const tavilyResearchService = {
+      search: vi.fn().mockResolvedValue([
+        {
+          title: "GitHub Copilot momentum",
+          url: "https://example.com/copilot",
+          snippet: "Global usage continues to grow.",
+        },
+        {
+          title: "Invalid source",
+          url: "not-a-url",
+          snippet: "This source should be dropped by validation.",
+        },
+      ]),
+    };
 
-    const graph = new ReportGenerationGraph(provider as never);
+    const graph = new ReportGenerationGraph(provider as never, tavilyResearchService as never);
 
     await expect(
       graph.run({
@@ -130,29 +132,28 @@ describe("ReportGenerationGraph", () => {
       }),
     ).resolves.toEqual(generatedReport);
 
-    expect(provider.generate).toHaveBeenCalledTimes(5);
+    expect(provider.generate).toHaveBeenCalledTimes(4);
     expect(provider.generate).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining("Planner"),
       expect.anything(),
     );
+    expect(tavilyResearchService.search).toHaveBeenCalledWith([
+      "AI coding assistants market",
+      "AI coding assistants Russia",
+    ]);
     expect(provider.generate).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining("AI coding assistants market"),
-      expect.anything(),
-    );
-    expect(provider.generate).toHaveBeenNthCalledWith(
-      3,
       expect.stringContaining("https://example.com/copilot"),
       expect.anything(),
     );
     expect(provider.generate).toHaveBeenNthCalledWith(
-      4,
+      3,
       expect.stringContaining("global_market"),
       expect.anything(),
     );
     expect(provider.generate).toHaveBeenNthCalledWith(
-      5,
+      4,
       expect.stringContaining('"score":7'),
       expect.anything(),
     );
