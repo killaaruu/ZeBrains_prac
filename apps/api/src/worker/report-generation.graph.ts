@@ -1,6 +1,7 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { Injectable, Logger } from "@nestjs/common";
-import { type ReportResult, ruMarketNotFound } from "@repo/shared";
+import { type ReportResult, reportResultSchema } from "@repo/shared";
+import { OllamaProvider } from "./ollama.provider";
 
 export interface ReportGenerationInput {
   reportId: string;
@@ -19,11 +20,16 @@ const ReportGenerationState = Annotation.Root({
 export class ReportGenerationGraph {
   private readonly logger = new Logger(ReportGenerationGraph.name);
 
+  constructor(private readonly ollamaProvider: OllamaProvider) {}
+
   async run(input: ReportGenerationInput): Promise<ReportResult> {
     const startedAt = Date.now();
     const graph = new StateGraph(ReportGenerationState)
-      .addNode("assemble", (state: typeof ReportGenerationState.State) => ({
-        result: this.assemblePlaceholderReport(state.topic),
+      .addNode("assemble", async (state: typeof ReportGenerationState.State) => ({
+        result: await this.ollamaProvider.generate(
+          this.buildAssemblerPrompt(state.topic),
+          reportResultSchema,
+        ),
       }))
       .addEdge(START, "assemble")
       .addEdge("assemble", END)
@@ -36,26 +42,11 @@ export class ReportGenerationGraph {
     return state.result;
   }
 
-  private assemblePlaceholderReport(topic: string): ReportResult {
-    return {
-      trend_name: topic,
-      global_market: [
-        {
-          product: topic,
-          company: "Not analyzed yet",
-          effects:
-            "Worker scaffold accepted the job; full research graph is implemented in later M4 issues.",
-          sources: ["https://example.com"],
-        },
-      ],
-      ru_market: ruMarketNotFound,
-      sustainability: {
-        score: 1,
-        arguments_for: ["The worker pipeline is available for asynchronous report generation."],
-        arguments_against: [
-          "Research, validation, and scoring nodes are not implemented in this issue.",
-        ],
-      },
-    };
+  private buildAssemblerPrompt(topic: string): string {
+    return [
+      "Return a TrendScout report as JSON.",
+      "Use the provided topic as the trend under analysis.",
+      `Topic: ${topic}`,
+    ].join("\n");
   }
 }
