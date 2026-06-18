@@ -6,15 +6,13 @@ import type { CreateReport, Report } from "@repo/shared";
 import { reportResultSchema } from "@repo/shared";
 import type { Queue } from "bullmq";
 import { and, desc, eq } from "drizzle-orm";
-import { GENERATE_REPORT_JOB, REPORTS_QUEUE } from "../../queue/queue.constants";
+import {
+  GENERATE_REPORT_JOB,
+  type GenerateReportJobPayload,
+  REPORT_GENERATION_QUEUE,
+} from "../../queue/queue.constants";
 
 type ReportRow = typeof reports.$inferSelect;
-
-export interface GenerateReportJobData {
-  reportId: string;
-  topic: string;
-  userId: string;
-}
 
 export function mapReportRow(row: ReportRow): Report {
   return {
@@ -35,7 +33,8 @@ export class ReportsService {
 
   constructor(
     @Inject("DRIZZLE_DB") private readonly db: DrizzleDb,
-    @InjectQueue(REPORTS_QUEUE) private readonly reportsQueue: Queue<GenerateReportJobData>,
+    @InjectQueue(REPORT_GENERATION_QUEUE)
+    private readonly reportsQueue: Queue<GenerateReportJobPayload>,
   ) {}
 
   async create(input: CreateReport, userId: string): Promise<{ id: string }> {

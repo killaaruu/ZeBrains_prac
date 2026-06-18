@@ -5,7 +5,7 @@ import { BullModule } from "@nestjs/bullmq";
 import { Logger, Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ExampleProcessor } from "./example.processor";
-import { EXAMPLE_QUEUE, REPORTS_QUEUE } from "./queue.constants";
+import { EXAMPLE_QUEUE, REPORT_GENERATION_QUEUE } from "./queue.constants";
 
 const logger = new Logger("QueueModule");
 
@@ -38,10 +38,10 @@ function parseRedisUrl(redisUrl: string) {
       },
     }),
     BullModule.registerQueue({ name: EXAMPLE_QUEUE }),
-    BullModule.registerQueue({ name: REPORTS_QUEUE }),
+    BullModule.registerQueue({ name: REPORT_GENERATION_QUEUE }),
     BullBoardModule.forRoot({ route: "/queues", adapter: ExpressAdapter }),
     BullBoardModule.forFeature({ name: EXAMPLE_QUEUE, adapter: BullMQAdapter }),
-    BullBoardModule.forFeature({ name: REPORTS_QUEUE, adapter: BullMQAdapter }),
+    BullBoardModule.forFeature({ name: REPORT_GENERATION_QUEUE, adapter: BullMQAdapter }),
   ],
   providers: [ExampleProcessor],
 })
