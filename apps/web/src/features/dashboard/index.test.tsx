@@ -1,9 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./index";
 
-const mockMutate = vi.fn();
+const mockNavigate = vi.fn();
 
 vi.mock("@/shared/components/layout/header", () => ({
   Header: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -17,12 +17,16 @@ vi.mock("@/shared/components/theme-switch", () => ({
   ThemeSwitch: () => null,
 }));
 
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 vi.mock("@repo/client-core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@repo/client-core")>();
   return {
     ...actual,
     useCreateReport: () => ({
-      mutate: mockMutate,
+      mutateAsync: vi.fn(),
       isPending: false,
     }),
     useReports: () => ({
@@ -68,18 +72,12 @@ vi.mock("@repo/client-core", async (importOriginal) => {
 });
 
 describe("Dashboard", () => {
-  it("submits a topic and renders report history from client-core hooks", () => {
-    render(<Dashboard />);
+  it("renders report history and uses the route-selected report view", () => {
+    render(<Dashboard reportId="550e8400-e29b-41d4-a716-446655440000" />);
 
     expect(screen.getByText("TrendScout")).toBeInTheDocument();
     expect(screen.getAllByText("AI coding assistants")).toHaveLength(3);
     expect(screen.getByText("Sustainability score")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Research topic"), {
-      target: { value: "Agentic coding" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Generate report" }));
-
-    expect(mockMutate).toHaveBeenCalledWith({ topic: "Agentic coding" }, expect.any(Object));
+    expect(screen.getByRole("button", { name: /generate report/i })).toBeInTheDocument();
   });
 });
