@@ -29,6 +29,18 @@ export function createAuthStore<TRole = string>(
     onTokenChange?.(token);
   };
 
+  const resolveRole = async (user: AuthUser | null, accessToken: string | null) => {
+    if (!user || !accessToken || !fetchRole) {
+      return null;
+    }
+
+    try {
+      return await fetchRole();
+    } catch {
+      return null;
+    }
+  };
+
   return create<AuthStoreState<TRole>>((set, get) => ({
     user: null,
     role: null,
@@ -50,20 +62,14 @@ export function createAuthStore<TRole = string>(
 
         notifyToken(session?.accessToken ?? null);
 
-        let role: TRole | null = null;
-        if (user && session?.accessToken && fetchRole) {
-          try {
-            role = await fetchRole();
-          } catch {
-            role = null;
-          }
-        }
+        const role = await resolveRole(user, session?.accessToken ?? null);
 
         set({ user, role, isLoading: false, isInitialized: true });
 
-        unsubscribe = authService.onAuthStateChange((_event, nextUser, nextSession) => {
+        unsubscribe = authService.onAuthStateChange(async (_event, nextUser, nextSession) => {
           notifyToken(nextSession?.accessToken ?? null);
-          set({ user: nextUser });
+          const nextRole = await resolveRole(nextUser, nextSession?.accessToken ?? null);
+          set({ user: nextUser, role: nextRole });
         });
       } catch {
         notifyToken(null);
