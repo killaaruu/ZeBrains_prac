@@ -28,6 +28,9 @@ const analysisSchema = z.object({
 
 type ReportAnalysis = z.infer<typeof analysisSchema>;
 
+const LINK_VALIDATION_TIMEOUT_MS = 1_500;
+const LINK_VALIDATION_CONCURRENCY = 3;
+
 const ReportGenerationState = Annotation.Root({
   reportId: Annotation<string>(),
   userId: Annotation<string>(),
@@ -119,9 +122,23 @@ export class ReportGenerationGraph {
    * Link-Validator enforces a basic URL sanity gate in the wiring issue so later nodes
    * never see obviously broken links. A later issue can replace this with live HEAD/GET checks.
    */
-  private validateLinks(state: GraphState): Pick<GraphState, "validatedSources"> {
+  private async validateLinks(state: GraphState): Promise<Pick<GraphState, "validatedSources">> {
+    const validationResults = await this.mapWithConcurrency(
+      state.rawSources,
+      LINK_VALIDATION_CONCURRENCY,
+      async (source: TavilySourceCandidate) => {
+        if (!this.isHttpUrl(source.url)) {
+          return null;
+        }
+
+        return (await this.isLiveUrl(source.url)) ? source : null;
+      },
+    );
+
     return {
-      validatedSources: state.rawSources.filter((source) => this.isHttpUrl(source.url)),
+      validatedSources: validationResults.filter(
+        (source): source is TavilySourceCandidate => source !== null,
+      ),
     };
   }
 
@@ -192,5 +209,72 @@ export class ReportGenerationGraph {
     } catch {
       return false;
     }
+  }
+
+  private async isLiveUrl(url: string): Promise<boolean> {
+    const headResult = await this.fetchWithTimeout(url, "HEAD");
+
+    if (headResult === "live") {
+      return true;
+    }
+
+    if (headResult === "aborted") {
+      return false;
+    }
+
+    return (await this.fetchWithTimeout(url, "GET")) === "live";
+  }
+
+  private async fetchWithTimeout(
+    url: string,
+    method: "GET" | "HEAD",
+  ): Promise<"live" | "dead" | "aborted"> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), LINK_VALIDATION_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        method,
+        redirect: "follow",
+        signal: controller.signal,
+      });
+
+      return response.ok ? "live" : "dead";
+    } catch (error) {
+      if (this.isAbortError(error)) {
+        return "aborted";
+      }
+
+      return "dead";
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  private isAbortError(error: unknown): boolean {
+    return error instanceof DOMException && error.name === "AbortError";
+  }
+
+  private async mapWithConcurrency<TInput, TOutput>(
+    values: readonly TInput[],
+    concurrency: number,
+    mapper: (value: TInput, index: number) => Promise<TOutput>,
+  ): Promise<TOutput[]> {
+    const results = new Array<TOutput>(values.length);
+    let nextIndex = 0;
+
+    const runWorker = async () => {
+      while (nextIndex < values.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(values[currentIndex], currentIndex);
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, values.length) }, () => runWorker()),
+    );
+
+    return results;
   }
 }
