@@ -70,6 +70,7 @@ describe("ReportsService", () => {
       topic: "AI coding assistants",
       userId: "11111111-1111-4111-8111-111111111111",
     });
+    expect(queue.add).toHaveBeenCalledOnce();
   });
 
   it("lists reports scoped to the current user", async () => {
