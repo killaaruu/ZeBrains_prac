@@ -65,4 +65,31 @@ describe("OllamaProvider", () => {
     );
     expect(warnSpy).toHaveBeenCalled();
   });
+
+  it("uses the per-call timeout budget when provided", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        response: JSON.stringify({ trend_name: "AI coding assistants" }),
+      }),
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OllamaProvider(
+      new ConfigService({
+        OLLAMA_BASE_URL: "http://ollama.local:11434",
+        LLM_MODEL_POOL: "qwen2.5:7b",
+      }),
+    );
+
+    await expect(
+      provider.generate("Return a report", reportSchema, { timeoutMs: 4_321 }),
+    ).resolves.toEqual({
+      trend_name: "AI coding assistants",
+    });
+
+    expect(timeoutSpy).toHaveBeenCalledWith(4_321);
+  });
 });

@@ -5,6 +5,10 @@ import type { ZodType } from "zod";
 const OLLAMA_GENERATE_PATH = "/api/generate";
 const OLLAMA_REQUEST_TIMEOUT_MS = 120_000;
 
+export interface OllamaGenerateOptions {
+  timeoutMs?: number;
+}
+
 interface OllamaGenerateResponse {
   error?: string;
   response?: string;
@@ -26,13 +30,21 @@ export class OllamaProvider {
   }
 
   async generate(prompt: string): Promise<string>;
-  async generate<T>(prompt: string, schema: ZodType<T>): Promise<T>;
-  async generate<T>(prompt: string, schema?: ZodType<T>): Promise<string | T> {
+  async generate<T>(
+    prompt: string,
+    schema: ZodType<T>,
+    options?: OllamaGenerateOptions,
+  ): Promise<T>;
+  async generate<T>(
+    prompt: string,
+    schema?: ZodType<T>,
+    options?: OllamaGenerateOptions,
+  ): Promise<string | T> {
     const failures: string[] = [];
 
     for (const [index, model] of this.modelPool.entries()) {
       try {
-        const response = await this.requestModel(model, prompt, schema);
+        const response = await this.requestModel(model, prompt, schema, options);
         return schema ? schema.parse(JSON.parse(response)) : response;
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown Ollama error";
@@ -53,6 +65,7 @@ export class OllamaProvider {
     model: string,
     prompt: string,
     schema?: ZodType<T>,
+    options?: OllamaGenerateOptions,
   ): Promise<string> {
     const response = await fetch(`${this.baseUrl}${OLLAMA_GENERATE_PATH}`, {
       method: "POST",
@@ -63,7 +76,7 @@ export class OllamaProvider {
         stream: false,
         ...(schema ? { format: "json" } : {}),
       }),
-      signal: AbortSignal.timeout(OLLAMA_REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(options?.timeoutMs ?? OLLAMA_REQUEST_TIMEOUT_MS),
     });
 
     if (!response.ok) {
