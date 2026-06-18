@@ -34,6 +34,15 @@ type ReportAnalysis = z.infer<typeof analysisSchema>;
 
 const LINK_VALIDATION_TIMEOUT_MS = 1_500;
 const LINK_VALIDATION_CONCURRENCY = 3;
+const NODE_TIMEOUT_MS = {
+  "input-guard": 1_000,
+  planner: 10_000,
+  researcher: 8_000,
+  "link-validator": 10_000,
+  analyst: 20_000,
+  "sustainability-scorer": 15_000,
+  assembler: 10_000,
+} as const;
 
 const ReportGenerationState = Annotation.Root({
   reportId: Annotation<string>(),
@@ -49,6 +58,8 @@ const ReportGenerationState = Annotation.Root({
 });
 
 type GraphState = typeof ReportGenerationState.State;
+type GraphNodeName = keyof typeof NODE_TIMEOUT_MS;
+type NodeTimings = Partial<Record<GraphNodeName, number>>;
 
 /**
  * LangGraph wiring for the TrendScout report pipeline.
@@ -69,15 +80,32 @@ export class ReportGenerationGraph {
 
   async run(input: ReportGenerationInput): Promise<ReportResult> {
     const startedAt = Date.now();
+    const nodeTimingsMs: NodeTimings = {};
 
     const graph = new StateGraph(ReportGenerationState)
-      .addNode("input-guard", (state: GraphState) => this.guardInput(state))
-      .addNode("planner", (state: GraphState) => this.plan(state))
-      .addNode("researcher", (state: GraphState) => this.research(state))
-      .addNode("link-validator", (state: GraphState) => this.validateLinks(state))
-      .addNode("analyst", (state: GraphState) => this.analyze(state))
-      .addNode("sustainability-scorer", (state: GraphState) => this.scoreSustainability(state))
-      .addNode("assembler", (state: GraphState) => this.assemble(state))
+      .addNode("input-guard", (state: GraphState) =>
+        this.runNode("input-guard", input, nodeTimingsMs, () => this.guardInput(state)),
+      )
+      .addNode("planner", (state: GraphState) =>
+        this.runNode("planner", input, nodeTimingsMs, () => this.plan(state)),
+      )
+      .addNode("researcher", (state: GraphState) =>
+        this.runNode("researcher", input, nodeTimingsMs, () => this.research(state)),
+      )
+      .addNode("link-validator", (state: GraphState) =>
+        this.runNode("link-validator", input, nodeTimingsMs, () => this.validateLinks(state)),
+      )
+      .addNode("analyst", (state: GraphState) =>
+        this.runNode("analyst", input, nodeTimingsMs, () => this.analyze(state)),
+      )
+      .addNode("sustainability-scorer", (state: GraphState) =>
+        this.runNode("sustainability-scorer", input, nodeTimingsMs, () =>
+          this.scoreSustainability(state),
+        ),
+      )
+      .addNode("assembler", (state: GraphState) =>
+        this.runNode("assembler", input, nodeTimingsMs, () => this.assemble(state)),
+      )
       .addEdge(START, "input-guard")
       .addEdge("input-guard", "planner")
       .addEdge("planner", "researcher")
@@ -91,7 +119,14 @@ export class ReportGenerationGraph {
     const state = await graph.invoke(input);
 
     this.logger.log(
-      `Assembled report ${input.reportId} for user ${input.userId} in ${Date.now() - startedAt}ms`,
+      JSON.stringify({
+        event: "report_generation_completed",
+        reportId: input.reportId,
+        userId: input.userId,
+        durationMs: Date.now() - startedAt,
+        nodeTimingsMs,
+        report: state.report,
+      }),
     );
 
     return state.report;
@@ -123,6 +158,7 @@ export class ReportGenerationGraph {
         state.guardedTopic,
       ].join("\n"),
       plannerOutputSchema,
+      { timeoutMs: NODE_TIMEOUT_MS.planner },
     );
 
     return { subQueries };
@@ -178,6 +214,7 @@ export class ReportGenerationGraph {
         `Validated sources: ${JSON.stringify(state.validatedSources)}`,
       ].join("\n"),
       analysisSchema,
+      { timeoutMs: NODE_TIMEOUT_MS.analyst },
     );
 
     return {
@@ -205,6 +242,7 @@ export class ReportGenerationGraph {
         `Analysis: ${JSON.stringify(state.analysis)}`,
       ].join("\n"),
       reportSustainabilitySchema,
+      { timeoutMs: NODE_TIMEOUT_MS["sustainability-scorer"] },
     );
 
     return { sustainability };
@@ -224,10 +262,52 @@ export class ReportGenerationGraph {
         `Sustainability: ${JSON.stringify(state.sustainability)}`,
       ].join("\n"),
       reportResultSchema,
+      { timeoutMs: NODE_TIMEOUT_MS.assembler },
     );
-
-    this.logger.log(JSON.stringify(report));
     return { report };
+  }
+
+  private async runNode<T>(
+    node: GraphNodeName,
+    input: ReportGenerationInput,
+    nodeTimingsMs: NodeTimings,
+    runner: () => Promise<T> | T,
+  ): Promise<T> {
+    const startedAt = Date.now();
+
+    try {
+      const result = await this.withTimeout(
+        Promise.resolve().then(() => runner()),
+        NODE_TIMEOUT_MS[node],
+        `${node} node timed out after ${NODE_TIMEOUT_MS[node]}ms`,
+      );
+      const durationMs = Date.now() - startedAt;
+      nodeTimingsMs[node] = durationMs;
+      this.logger.log(
+        JSON.stringify({
+          event: "report_generation_node_completed",
+          reportId: input.reportId,
+          userId: input.userId,
+          node,
+          durationMs,
+        }),
+      );
+      return result;
+    } catch (error) {
+      const durationMs = Date.now() - startedAt;
+      nodeTimingsMs[node] = durationMs;
+      this.logger.warn(
+        JSON.stringify({
+          event: "report_generation_node_failed",
+          reportId: input.reportId,
+          userId: input.userId,
+          node,
+          durationMs,
+          error: error instanceof Error ? error.message : "Unknown graph node error",
+        }),
+      );
+      throw error;
+    }
   }
 
   private formatTopicForPrompt(topic: string): string {
@@ -354,5 +434,26 @@ export class ReportGenerationGraph {
     );
 
     return results;
+  }
+
+  private async withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    message: string,
+  ): Promise<T> {
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timeoutHandle = setTimeout(() => reject(new Error(message)), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
   }
 }
