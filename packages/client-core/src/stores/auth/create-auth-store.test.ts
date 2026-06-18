@@ -167,10 +167,56 @@ describe("createAuthStore", () => {
       expiresAt: 0,
       user: newUser,
     };
-    listener!("SIGNED_IN", newUser, newSession);
+    await listener!("SIGNED_IN", newUser, newSession);
 
     expect(useStore.getState().user).toEqual(newUser);
     expect(onTokenChange).toHaveBeenLastCalledWith("fresh");
+  });
+
+  it("refreshes role when auth state changes to a signed-in user", async () => {
+    let listener: ((e: AuthEvent, u: AuthUser | null, s: AuthSession | null) => void) | null = null;
+    mocks.onAuthStateChange.mockImplementation((cb) => {
+      listener = cb as typeof listener;
+      return () => {};
+    });
+    mocks.getUser.mockResolvedValue(null);
+    mocks.getSession.mockResolvedValue(null);
+
+    const fetchRole = vi.fn().mockResolvedValue("admin");
+    const useStore = createAuthStore({ authService, fetchRole });
+    await useStore.getState().initialize();
+
+    const newUser: AuthUser = { id: "u2", email: "x@y.com" };
+    const newSession: AuthSession = {
+      accessToken: "fresh",
+      refreshToken: "r",
+      expiresAt: 0,
+      user: newUser,
+    };
+
+    await listener!("SIGNED_IN", newUser, newSession);
+
+    expect(fetchRole).toHaveBeenCalledTimes(1);
+    expect(useStore.getState().role).toBe("admin");
+  });
+
+  it("clears role when auth state changes to signed out", async () => {
+    let listener: ((e: AuthEvent, u: AuthUser | null, s: AuthSession | null) => void) | null = null;
+    mocks.onAuthStateChange.mockImplementation((cb) => {
+      listener = cb as typeof listener;
+      return () => {};
+    });
+    mocks.getUser.mockResolvedValue(null);
+    mocks.getSession.mockResolvedValue(null);
+
+    const useStore = createAuthStore({ authService });
+    useStore.setState({ role: "admin" });
+    await useStore.getState().initialize();
+
+    await listener!("SIGNED_OUT", null, null);
+
+    expect(useStore.getState().user).toBeNull();
+    expect(useStore.getState().role).toBeNull();
   });
 
   it("does not initialize twice", async () => {
