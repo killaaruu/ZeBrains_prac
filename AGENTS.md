@@ -30,6 +30,59 @@ automatically — so they are written here as explicit instructions.
 6. **Comment complex logic** — especially LangGraph agent nodes.
 7. **YAGNI** — implement only the current issue's scope.
 
+## Which skill for which task (NO auto-enforcement — you invoke it)
+Codex does not auto-trigger skills. So **you must read and apply the matching skill in
+`.agents/skills/<name>/SKILL.md` yourself** before doing that kind of work. Map the task to a flow:
+
+- **A — Feature work (any size):** `explore-codebase` (if unfamiliar) → `brainstorm` (design
+  before code) → strict-TDD implementation → `verify`. If the feature has UI in `apps/web`,
+  also apply **`frontend-design`** before writing components.
+- **B — Stacked layer additions** (data → contract → api → client → ui) — run the scaffolders
+  in order, each with its test: `new-drizzle-table` → `db-migrate` → `new-shared-schema` →
+  `new-api-module` → `codegen-api` → `new-client-hook` → `new-frontend-feature`
+  (→ `frontend-design` for the visual layer).
+- **C — Bugs / test failures / unexpected behavior:** `systematic-debugging` FIRST
+  (reproduce → failing test → fix). Never guess-patch. Then `verify`.
+
+Per-task triggers:
+
+| When the task is… | Read & apply skill |
+|---|---|
+| Unfamiliar area before editing | `explore-codebase` |
+| Designing a feature before code | `brainstorm` |
+| New DB table / column | `new-drizzle-table` → `db-migrate` |
+| New shared Zod contract | `new-shared-schema` |
+| New API module / endpoint | `new-api-module` → `codegen-api` (verify contract) |
+| New client data hook | `new-client-hook` |
+| New UI feature folder | `new-frontend-feature` |
+| **Any UI screen/component/styling in `apps/web`** | **`frontend-design`** |
+| Any bug or failing test | `systematic-debugging` |
+| Integration / e2e API coverage | `e2e-test` |
+| New `@repo/*` workspace package | `new-package` |
+| Verifying before claiming "done" | `verify` |
+| Shipping a branch to staging | `ship-to-staging` |
+| Modeling / documenting a domain | `ddd-doc` |
+
+**Stages with no dedicated Codex skill — do them by procedure (follow `CLAUDE.md`):**
+- **Add/change an API env var:** update `apps/api/src/config/env.validation.ts` (Zod) **and**
+  `apps/api/.env.example`, **and** wire the value into the deployment (Helm values in
+  `deploy/charts/api/` + the gitops secret), then verify it on the running pod after the sync.
+  An env var is never just `.env` — see `CLAUDE.md` "Ops / Deploy".
+- **Deploy / infra (k3s, Helm, ArgoCD):** only the API is containerized; web → Vercel. Edit the
+  Helm chart under `deploy/charts/api/`; infra names come from GitHub repo vars/secrets, never
+  hard-code them. Confirm the rollout synced before reporting done.
+- **Record an architecture decision:** write an ADR in `docs/adr/NNN-kebab-title.md`
+  (`## Context / ## Decision / ## Consequences`); mirror an existing sibling.
+- **Realtime status UI (Supabase Realtime):** consume it through `@repo/services-client`
+  (never the Supabase SDK directly in a feature) + a `new-client-hook`, rendered by a
+  `new-frontend-feature` (+ `frontend-design`).
+
+These task types map to the roadmap milestones **M1→M6** in the design spec (§9): backend/data
+first, then the M5 dashboard UI, then M6 deploy/infra/docs.
+
+`/impl-issue <N>` already enforces TDD + the pre-push gate; layer the skills above on top by task type.
+This table mirrors the "Dev Flows" table in `CLAUDE.md` — keep the two in sync if either changes.
+
 ## Stack (full detail in CLAUDE.md)
 TypeScript strict · Node 24 · pnpm · Turborepo · NestJS API (Drizzle, BullMQ,
 Supabase Auth) · React web (TanStack Query/Router, Tailwind, Supabase Realtime)
