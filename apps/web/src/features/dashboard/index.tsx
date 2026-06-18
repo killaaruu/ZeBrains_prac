@@ -1,18 +1,16 @@
-import { useCreateReport, useReport, useReports } from "@repo/client-core";
-import type { CreateReport, Report, ReportResult } from "@repo/shared";
-import { useEffect, useState } from "react";
+import { useReport, useReports } from "@repo/client-core";
+import type { Report, ReportResult } from "@repo/shared";
+import { useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { Header } from "@/shared/components/layout/header";
 import { Main } from "@/shared/components/layout/main";
 import { ProfileDropdown } from "@/shared/components/profile-dropdown";
 import { ThemeSwitch } from "@/shared/components/theme-switch";
 import { apiClient } from "@/shared/lib/api-client";
 import { Badge } from "@/shared/ui/badge";
-import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
-import { Input } from "@/shared/ui/input";
-import { Label } from "@/shared/ui/label";
+import { TopicForm } from "./components/topic-form";
 
-const createReport = (input: CreateReport) => apiClient.post<{ id: string }>("/reports", input);
 const listReports = () => apiClient.get<Report[]>("/reports");
 const getReport = (id: string) => apiClient.get<Report>(`/reports/${id}`);
 
@@ -51,40 +49,30 @@ function renderMarket(items: ReportResult["global_market"] | ReportResult["ru_ma
   );
 }
 
-export function Dashboard() {
-  const [topic, setTopic] = useState("");
-  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+interface DashboardProps {
+  reportId?: string | null;
+}
 
+export function Dashboard({ reportId = null }: DashboardProps) {
+  const navigate = useNavigate();
   const reports = useReports({ fetcher: listReports });
-  const create = useCreateReport({ mutationFn: createReport });
   const detail = useReport({
-    id: selectedReportId ?? "",
+    id: reportId ?? "",
     fetcher: getReport,
-    enabled: selectedReportId !== null,
+    enabled: reportId !== null,
   });
 
   useEffect(() => {
-    if (!selectedReportId && reports.data?.[0]) {
-      setSelectedReportId(reports.data[0].id);
+    if (!reportId && reports.data?.[0]) {
+      navigate({
+        to: "/dashboard",
+        search: { reportId: reports.data[0].id },
+      });
     }
-  }, [reports.data, selectedReportId]);
+  }, [navigate, reportId, reports.data]);
 
   const selectedReport =
-    detail.data ?? reports.data?.find((report) => report.id === selectedReportId) ?? null;
-
-  const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    create.mutate(
-      { topic },
-      {
-        onSuccess: ({ id }) => {
-          setTopic("");
-          setSelectedReportId(id);
-        },
-      },
-    );
-  };
+    detail.data ?? reports.data?.find((report) => report.id === reportId) ?? null;
 
   return (
     <>
@@ -104,20 +92,7 @@ export function Dashboard() {
                 <CardDescription>Submit a trend topic for the research pipeline.</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={onSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="report-topic">Research topic</Label>
-                    <Input
-                      id="report-topic"
-                      value={topic}
-                      onChange={(event) => setTopic(event.target.value)}
-                      placeholder="AI coding assistants"
-                    />
-                  </div>
-                  <Button type="submit" disabled={create.isPending || topic.trim().length === 0}>
-                    {create.isPending ? "Submitting..." : "Generate report"}
-                  </Button>
-                </form>
+                <TopicForm />
               </CardContent>
             </Card>
 
@@ -142,7 +117,12 @@ export function Dashboard() {
                   <button
                     key={report.id}
                     type="button"
-                    onClick={() => setSelectedReportId(report.id)}
+                    onClick={() =>
+                      navigate({
+                        to: "/dashboard",
+                        search: { reportId: report.id },
+                      })
+                    }
                     className="flex w-full items-start justify-between rounded-lg border p-3 text-left transition-colors hover:border-[var(--brand)]"
                   >
                     <div>
