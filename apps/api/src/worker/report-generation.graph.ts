@@ -10,6 +10,7 @@ import {
 } from "@repo/shared";
 import { z } from "zod";
 import { OllamaProvider } from "./ollama.provider";
+import { TavilyResearchService, type TavilySourceCandidate } from "./tavily-research.service";
 
 export interface ReportGenerationInput {
   reportId: string;
@@ -19,21 +20,12 @@ export interface ReportGenerationInput {
 
 const plannerOutputSchema = z.array(z.string().trim().min(1)).min(1);
 
-const researchSourceSchema = z.object({
-  title: z.string().trim().min(1),
-  url: z.string().trim().min(1),
-  snippet: z.string().trim().min(1),
-});
-
-const researchSourcesSchema = z.array(researchSourceSchema).min(1);
-
 const analysisSchema = z.object({
   trend_name: z.string().trim().min(1),
   global_market: z.array(reportMarketItemSchema).min(1),
   ru_market: z.union([z.array(reportMarketItemSchema).min(1), z.literal(ruMarketNotFound)]),
 });
 
-type ResearchSource = z.infer<typeof researchSourceSchema>;
 type ReportAnalysis = z.infer<typeof analysisSchema>;
 
 const ReportGenerationState = Annotation.Root({
@@ -41,8 +33,8 @@ const ReportGenerationState = Annotation.Root({
   userId: Annotation<string>(),
   topic: Annotation<string>(),
   subQueries: Annotation<string[]>(),
-  rawSources: Annotation<ResearchSource[]>(),
-  validatedSources: Annotation<ResearchSource[]>(),
+  rawSources: Annotation<TavilySourceCandidate[]>(),
+  validatedSources: Annotation<TavilySourceCandidate[]>(),
   analysis: Annotation<ReportAnalysis>(),
   sustainability: Annotation<ReportSustainability>(),
   report: Annotation<ReportResult>(),
@@ -62,7 +54,10 @@ type GraphState = typeof ReportGenerationState.State;
 export class ReportGenerationGraph {
   private readonly logger = new Logger(ReportGenerationGraph.name);
 
-  constructor(private readonly ollamaProvider: OllamaProvider) {}
+  constructor(
+    private readonly ollamaProvider: OllamaProvider,
+    private readonly tavilyResearchService: TavilyResearchService,
+  ) {}
 
   async run(input: ReportGenerationInput): Promise<ReportResult> {
     const startedAt = Date.now();
@@ -111,20 +106,11 @@ export class ReportGenerationGraph {
   }
 
   /**
-   * Researcher gathers raw source candidates for the planned sub-queries. This issue
-   * keeps the source shape minimal: title, URL, and supporting snippet.
+   * Researcher fans out across the planner sub-queries through Tavily, then returns
+   * a deduped candidate-source set for downstream validation and analysis.
    */
   private async research(state: GraphState): Promise<Pick<GraphState, "rawSources">> {
-    const rawSources = await this.ollamaProvider.generate(
-      [
-        "Researcher",
-        "Collect source candidates for the TrendScout report topic.",
-        "Return a JSON array of objects with title, url, and snippet.",
-        `Topic: ${state.topic}`,
-        `Sub-queries: ${state.subQueries.join("; ")}`,
-      ].join("\n"),
-      researchSourcesSchema,
-    );
+    const rawSources = await this.tavilyResearchService.search(state.subQueries);
 
     return { rawSources };
   }
