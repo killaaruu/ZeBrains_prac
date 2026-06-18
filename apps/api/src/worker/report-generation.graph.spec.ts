@@ -1,65 +1,7 @@
 import { Logger } from "@nestjs/common";
 import type { ReportResult } from "@repo/shared";
 import { ruMarketNotFound } from "@repo/shared";
-import { describe, expect, it, vi } from "vitest";
-import type { OllamaProvider } from "./ollama.provider";
-import { ReportGenerationGraph } from "./report-generation.graph";
-
-vi.mock("@langchain/langgraph", () => {
-  const Annotation = () => ({});
-  Annotation.Root = () => ({ State: {} });
-
-  class MockStateGraph {
-    private nodes = new Map<string, (state: unknown) => unknown>();
-    private edges = new Map<string, string>();
-
-    addNode(name: string, handler: (state: unknown) => unknown) {
-      this.nodes.set(name, handler);
-      return this;
-    }
-
-    addEdge(from: string, to: string) {
-      this.edges.set(from, to);
-      return this;
-    }
-
-    compile() {
-      return {
-        invoke: async (input: unknown) => {
-          let current = "__start__";
-          let state = { ...((input ?? {}) as object) };
-
-          while (current !== "__end__") {
-            const next = this.edges.get(current);
-
-            if (!next || next === "__end__") {
-              break;
-            }
-
-            const node = this.nodes.get(next);
-
-            if (!node) {
-              throw new Error(`Missing mock node: ${next}`);
-            }
-
-            const result = await node(state);
-            state = { ...state, ...((result ?? {}) as object) };
-            current = next;
-          }
-
-          return state;
-        },
-      };
-    }
-  }
-
-  return {
-    Annotation,
-    END: "__end__",
-    START: "__start__",
-    StateGraph: MockStateGraph,
-  };
-});
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const generatedReport: ReportResult = {
   trend_name: "AI coding assistants",
@@ -80,8 +22,68 @@ const generatedReport: ReportResult = {
 };
 
 describe("ReportGenerationGraph", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.doMock("@langchain/langgraph", () => {
+      const Annotation = () => ({});
+      Annotation.Root = () => ({ State: {} });
+
+      class MockStateGraph {
+        private nodes = new Map<string, (state: unknown) => unknown>();
+        private edges = new Map<string, string>();
+
+        addNode(name: string, handler: (state: unknown) => unknown) {
+          this.nodes.set(name, handler);
+          return this;
+        }
+
+        addEdge(from: string, to: string) {
+          this.edges.set(from, to);
+          return this;
+        }
+
+        compile() {
+          return {
+            invoke: async (input: unknown) => {
+              let current = "__start__";
+              let state = { ...((input ?? {}) as object) };
+
+              while (current !== "__end__") {
+                const next = this.edges.get(current);
+
+                if (!next || next === "__end__") {
+                  break;
+                }
+
+                const node = this.nodes.get(next);
+
+                if (!node) {
+                  throw new Error(`Missing mock node: ${next}`);
+                }
+
+                const result = await node(state);
+                state = { ...state, ...((result ?? {}) as object) };
+                current = next;
+              }
+
+              return state;
+            },
+          };
+        }
+      }
+
+      return {
+        Annotation,
+        END: "__end__",
+        START: "__start__",
+        StateGraph: MockStateGraph,
+      };
+    });
+  });
+
   it("runs the full report graph and logs the assembled JSON", async () => {
     const loggerSpy = vi.spyOn(Logger.prototype, "log").mockImplementation(() => {});
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = {
       generate: vi
         .fn()
@@ -118,7 +120,7 @@ describe("ReportGenerationGraph", () => {
         .mockResolvedValueOnce(generatedReport),
     };
 
-    const graph = new ReportGenerationGraph(provider as unknown as OllamaProvider);
+    const graph = new ReportGenerationGraph(provider as never);
 
     await expect(
       graph.run({
