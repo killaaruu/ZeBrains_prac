@@ -12,6 +12,7 @@ import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 import { validateEnv } from "./config/env.validation";
 import { HealthModule } from "./health/health.module";
 import { ExampleModule } from "./modules/example/example.module";
+import { ReportsModule } from "./modules/reports/reports.module";
 import { QueueModule } from "./queue/queue.module";
 
 @Module({
@@ -24,6 +25,7 @@ import { QueueModule } from "./queue/queue.module";
     AuthModule,
     HealthModule,
     ExampleModule,
+    ReportsModule,
     QueueModule,
   ],
   providers: [

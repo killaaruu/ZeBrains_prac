@@ -85,6 +85,7 @@ import { RequestContextModule } from "./common/context/request-context.module";
 import { MetricsModule } from "./common/metrics/metrics.module";
 import { HealthModule } from "./health/health.module";
 import { ExampleModule } from "./modules/example/example.module";
+import { ReportsModule } from "./modules/reports/reports.module";
 import { QueueModule } from "./queue/queue.module";
 
 // nestjs-cls v6 ClsRootModule always injects HttpAdapterHost which isn't available
@@ -170,6 +171,15 @@ describe("Module DI compilation", () => {
   it("ExampleModule compiles without DI errors", async () => {
     const module = await Test.createTestingModule({
       imports: [configModule(), ExampleModule],
+    }).compile();
+
+    expect(module).toBeDefined();
+    await module.close();
+  });
+
+  it("ReportsModule compiles without DI errors", async () => {
+    const module = await Test.createTestingModule({
+      imports: [configModule(), ReportsModule],
     }).compile();
 
     expect(module).toBeDefined();

@@ -27,3 +27,26 @@ export const reportResultSchema = z.object({
 });
 
 export type ReportResult = z.infer<typeof reportResultSchema>;
+
+export const reportStatusSchema = z.enum(["queued", "thinking", "done", "error"]);
+
+export type ReportStatus = z.infer<typeof reportStatusSchema>;
+
+export const reportSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().min(1),
+  topic: z.string().min(1),
+  status: reportStatusSchema,
+  result: reportResultSchema.nullable(),
+  error: z.string().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export type Report = z.infer<typeof reportSchema>;
+
+export const createReportSchema = z.object({
+  topic: z.string().trim().min(1).max(500),
+});
+
+export type CreateReport = z.infer<typeof createReportSchema>;

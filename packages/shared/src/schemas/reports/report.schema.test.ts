@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { reportResultSchema } from "./report.schema";
+import {
+  createReportSchema,
+  reportResultSchema,
+  reportSchema,
+  reportStatusSchema,
+} from "./report.schema";
 
 const validMarketItem = {
   product: "AI coding assistant",
@@ -73,5 +78,40 @@ describe("reportResultSchema", () => {
         sustainability: { ...validReport.sustainability, arguments_for: [] },
       }),
     ).toThrow();
+  });
+});
+
+describe("createReportSchema", () => {
+  it("accepts a non-empty topic", () => {
+    expect(createReportSchema.parse({ topic: "AI coding assistants" })).toEqual({
+      topic: "AI coding assistants",
+    });
+  });
+
+  it("rejects an empty topic", () => {
+    expect(() => createReportSchema.parse({ topic: "" })).toThrow();
+  });
+});
+
+describe("reportStatusSchema", () => {
+  it("accepts worker lifecycle statuses", () => {
+    expect(reportStatusSchema.options).toEqual(["queued", "thinking", "done", "error"]);
+  });
+});
+
+describe("reportSchema", () => {
+  it("accepts queued reports without a result", () => {
+    const report = {
+      id: "00000000-0000-4000-8000-000000000000",
+      userId: "user-1",
+      topic: "AI coding assistants",
+      status: "queued",
+      result: null,
+      error: null,
+      createdAt: "2026-06-18T00:00:00.000Z",
+      updatedAt: "2026-06-18T00:01:00.000Z",
+    };
+
+    expect(reportSchema.parse(report)).toEqual(report);
   });
 });
