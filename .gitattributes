@@ -1,0 +1,36 @@
+# Normalize line endings: store LF in the repo, check out LF in the working tree.
+# Fixes the Windows CRLF↔LF churn that made Biome (`make format`/`make check`)
+# rewrite unrelated files on every run.
+* text=auto eol=lf
+
+# Scripts that must stay LF (run under sh in the Makefile / CI / containers)
+*.sh   text eol=lf
+Makefile text eol=lf
+
+# Windows-only scripts keep CRLF
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binary files — never normalize or diff as text
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.svg  text
+*.woff  binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
+*.otf  binary
+*.pdf  binary
+*.docx binary
+*.xlsx binary
+*.zip  binary
+*.gz   binary
+*.tar  binary
+*.sqlite binary
+*.sqlite-shm binary
+*.sqlite-wal binary
