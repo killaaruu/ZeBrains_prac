@@ -21,9 +21,16 @@ Implement the GitHub issue whose number the user provides (the argument).
   code without a failing test.
 - Implement ONLY the scope of this issue. YAGNI.
 - Use `pnpm` and the `Makefile` (`make help`), never raw npm/turbo.
-- For new stacked layers, prefer the repo scaffolder skills
-  ($new-drizzle-table, $new-shared-schema, $new-api-module, $new-api-endpoint,
-  $new-client-hook, $new-frontend-feature) and mirror the `example` domain.
+- **Route the work to the right skill** (see `AGENTS.md` → "Which skill for which task").
+  Codex has no auto-trigger, so read and apply the matching `.agents/skills/<name>/SKILL.md`
+  yourself based on the issue's type:
+  - Stacked layers: `new-drizzle-table` → `db-migrate` → `new-shared-schema` →
+    `new-api-module` → `codegen-api` → `new-client-hook` → `new-frontend-feature`,
+    mirroring the `example` domain.
+  - **Any UI in `apps/web`** (screen/component/styling): apply **`frontend-design`** before
+    writing components.
+  - A bug or failing test: `systematic-debugging` first (reproduce → failing test → fix).
+  - Unfamiliar area: `explore-codebase` first. Integration coverage: `e2e-test`.
 - Comment complex logic, especially LangGraph agent nodes.
 
 ## Pre-push gate (in order)
