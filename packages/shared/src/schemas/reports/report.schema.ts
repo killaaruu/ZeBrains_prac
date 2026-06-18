@@ -57,8 +57,21 @@ export const reportSchema = z.object({
 
 export type Report = z.infer<typeof reportSchema>;
 
+const topicSchema = z
+  .string()
+  .transform((value) => value.normalize("NFKC").replace(/\s+/gu, " ").trim())
+  .pipe(
+    z
+      .string()
+      .min(1)
+      .max(500)
+      .refine((value) => !/[\p{C}]/u.test(value), {
+        message: "Topic contains unsupported control characters",
+      }),
+  );
+
 export const createReportSchema = z.object({
-  topic: z.string().trim().min(1).max(500),
+  topic: topicSchema,
 });
 
 export type CreateReport = z.infer<typeof createReportSchema>;
