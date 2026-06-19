@@ -5,5 +5,6 @@ export type {
   RealtimePayload,
   TableSubscription,
 } from "./realtime";
+export { SupabaseRealtimeService } from "./realtime";
 export type { FileInfo, IStorageService, UploadParams, UploadResult } from "./storage";
 export { SupabaseStorageService } from "./storage";

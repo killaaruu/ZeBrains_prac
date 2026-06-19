@@ -1,9 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { marketNotFound, type Report } from "@repo/shared";
+import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./index";
 
 const mockNavigate = vi.fn();
+const mockUseReportRealtime = vi.fn();
 
 vi.mock("@/shared/components/layout/header", () => ({
   Header: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -21,6 +23,42 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => mockNavigate,
 }));
 
+const reportList: Report[] = [
+  {
+    id: "550e8400-e29b-41d4-a716-446655440000",
+    userId: "user-1",
+    topic: "AI coding assistants",
+    status: "done",
+    result: null,
+    error: null,
+    createdAt: "2026-06-17T12:00:00.000Z",
+    updatedAt: "2026-06-17T12:00:00.000Z",
+  },
+];
+
+const selectedDoneReport: Report = {
+  id: "550e8400-e29b-41d4-a716-446655440000",
+  userId: "user-1",
+  topic: "AI coding assistants",
+  status: "done",
+  result: {
+    trend_name: "AI coding assistants",
+    global_market: marketNotFound,
+    ru_market: marketNotFound,
+    sustainability: {
+      score: 8,
+      arguments_for: ["Developer demand"],
+      arguments_against: ["Evaluation complexity"],
+    },
+  },
+  error: null,
+  createdAt: "2026-06-17T12:00:00.000Z",
+  updatedAt: "2026-06-17T12:05:00.000Z",
+};
+
+const mockUseReports = vi.fn();
+const mockUseReport = vi.fn();
+
 vi.mock("@repo/client-core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@repo/client-core")>();
   return {
@@ -29,66 +67,62 @@ vi.mock("@repo/client-core", async (importOriginal) => {
       mutateAsync: vi.fn(),
       isPending: false,
     }),
-    useReports: () => ({
-      data: [
-        {
-          id: "550e8400-e29b-41d4-a716-446655440000",
-          userId: "user-1",
-          topic: "AI coding assistants",
-          status: "done",
-          result: null,
-          error: null,
-          createdAt: "2026-06-17T12:00:00.000Z",
-          updatedAt: "2026-06-17T12:00:00.000Z",
-        },
-      ],
-      isLoading: false,
-      isError: false,
-    }),
-    useReport: () => ({
-      data: {
-        id: "550e8400-e29b-41d4-a716-446655440000",
-        userId: "user-1",
-        topic: "AI coding assistants",
-        status: "done",
-        result: {
-          trend_name: "AI coding assistants",
-          global_market: "Не найдено",
-          ru_market: "Не найдено",
-          sustainability: {
-            score: 8,
-            arguments_for: ["Developer demand"],
-            arguments_against: ["Evaluation complexity"],
-          },
-        },
-        error: null,
-        createdAt: "2026-06-17T12:00:00.000Z",
-        updatedAt: "2026-06-17T12:05:00.000Z",
-      },
-      isLoading: false,
-      isError: false,
-    }),
+    useReports: (...args: Parameters<typeof mockUseReports>) => mockUseReports(...args),
+    useReport: (...args: Parameters<typeof mockUseReport>) => mockUseReport(...args),
+    useReportRealtime: (...args: Parameters<typeof mockUseReportRealtime>) =>
+      mockUseReportRealtime(...args),
   };
 });
 
 describe("Dashboard", () => {
-  it("renders report history and uses the route-selected report view", () => {
+  beforeEach(() => {
+    mockNavigate.mockReset();
+    mockUseReportRealtime.mockReset();
+    mockUseReports.mockReturnValue({
+      data: reportList,
+      isLoading: false,
+      isError: false,
+    });
+    mockUseReport.mockReturnValue({
+      data: selectedDoneReport,
+      isLoading: false,
+      isError: false,
+    });
+  });
+
+  it("renders report history, selected report details, and the done status label", () => {
     render(<Dashboard reportId="550e8400-e29b-41d4-a716-446655440000" />);
 
     expect(screen.getByText("TrendScout")).toBeInTheDocument();
     expect(screen.getAllByText("AI coding assistants")).toHaveLength(3);
     expect(screen.getByText("Sustainability score")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /generate report/i })).toBeInTheDocument();
+    expect(screen.getAllByText("Готово").length).toBeGreaterThan(0);
+    expect(screen.getByText("Status: done (Готово)")).toBeInTheDocument();
+    expect(mockUseReportRealtime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reportId: "550e8400-e29b-41d4-a716-446655440000",
+      }),
+    );
   });
 
-  it("re-opens a report when the user clicks a history row", () => {
+  it("renders queued state copy for an in-progress report", () => {
+    mockUseReport.mockReturnValue({
+      data: {
+        ...selectedDoneReport,
+        status: "queued",
+        result: null,
+      },
+      isLoading: false,
+      isError: false,
+    });
+
     render(<Dashboard reportId="550e8400-e29b-41d4-a716-446655440000" />);
 
-    fireEvent.click(screen.getByRole("button", { name: /ai coding assistants/i }));
-
-    expect(mockNavigate).toHaveBeenCalledWith({
-      to: "/dashboard",
-      search: { reportId: "550e8400-e29b-41d4-a716-446655440000" },
-    });
+    expect(screen.getAllByText("В очереди").length).toBeGreaterThan(0);
+    expect(screen.getByText("Status: queued (В очереди)")).toBeInTheDocument();
+    expect(
+      screen.getByText("Report is queued for research. Live status updates will appear here."),
+    ).toBeInTheDocument();
   });
 });

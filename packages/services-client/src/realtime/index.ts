@@ -7,3 +7,4 @@ export type {
   TableSubscription,
   Unsubscribe,
 } from "./realtime.interface";
+export { SupabaseRealtimeService } from "./supabase-realtime.service";
