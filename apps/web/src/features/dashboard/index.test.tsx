@@ -1,4 +1,4 @@
-import { marketNotFound, ruMarketNotFound, type Report } from "@repo/shared";
+import { marketNotFound, type Report, ruMarketNotFound } from "@repo/shared";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,10 +48,7 @@ const selectedDoneReport: Report = {
         product: "Cursor",
         company: "Anysphere",
         effects: "Accelerates code review and boilerplate generation.",
-        sources: [
-          "https://www.cursor.com",
-          "https://www.anthropic.com/news/claude-3-5-sonnet",
-        ],
+        sources: ["https://www.cursor.com", "https://www.anthropic.com/news/claude-3-5-sonnet"],
       },
     ],
     ru_market: ruMarketNotFound,
@@ -126,7 +123,9 @@ describe("Dashboard", () => {
     expect(screen.getByText("Arguments against")).toBeInTheDocument();
     expect(screen.getByText("Cursor")).toBeInTheDocument();
     expect(screen.getByText("Anysphere")).toBeInTheDocument();
-    expect(screen.getByText("Accelerates code review and boilerplate generation.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Accelerates code review and boilerplate generation."),
+    ).toBeInTheDocument();
     expect(screen.getByText(ruMarketNotFound)).toBeInTheDocument();
 
     const cursorLink = screen.getByRole("link", { name: "cursor.com" });

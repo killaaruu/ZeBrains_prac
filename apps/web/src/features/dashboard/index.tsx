@@ -264,11 +264,11 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-2">
-                        {selectedReport.result.sustainability.arguments_for.map((item) => (
-                          <li key={item} className="text-sm text-foreground/90">
-                            {item}
-                          </li>
-                        ))}
+                          {selectedReport.result.sustainability.arguments_for.map((item) => (
+                            <li key={item} className="text-sm text-foreground/90">
+                              {item}
+                            </li>
+                          ))}
                         </ul>
                       </CardContent>
                     </Card>
@@ -279,11 +279,11 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-2">
-                        {selectedReport.result.sustainability.arguments_against.map((item) => (
-                          <li key={item} className="text-sm text-foreground/90">
-                            {item}
-                          </li>
-                        ))}
+                          {selectedReport.result.sustainability.arguments_against.map((item) => (
+                            <li key={item} className="text-sm text-foreground/90">
+                              {item}
+                            </li>
+                          ))}
                         </ul>
                       </CardContent>
                     </Card>
