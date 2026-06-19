@@ -89,7 +89,9 @@ describe("ReportGenerationGraph", () => {
     const provider = {
       generate: vi
         .fn()
-        .mockResolvedValueOnce(["AI coding assistants market", "AI coding assistants Russia"])
+        .mockResolvedValueOnce({
+          queries: ["AI coding assistants market", "AI coding assistants Russia"],
+        })
         .mockResolvedValueOnce({
           trend_name: "AI coding assistants",
           global_market: [
@@ -187,7 +189,9 @@ describe("ReportGenerationGraph", () => {
     const provider = {
       generate: vi
         .fn()
-        .mockResolvedValueOnce(["AI coding assistants market", "AI coding assistants Russia"])
+        .mockResolvedValueOnce({
+          queries: ["AI coding assistants market", "AI coding assistants Russia"],
+        })
         .mockResolvedValueOnce({
           trend_name: "AI coding assistants",
           global_market: [

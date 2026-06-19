@@ -79,6 +79,9 @@ export function buildRuntimeEnv(input: RuntimeEnvInput): RuntimeEnv {
     OLLAMA_BASE_URL: hostEnv.OLLAMA_BASE_URL ?? DEFAULT_OLLAMA_BASE_URL,
     LLM_MODEL_POOL: hostEnv.LLM_MODEL_POOL ?? DEFAULT_LLM_MODEL_POOL,
     TAVILY_API_KEY: hostEnv.TAVILY_API_KEY,
+    // Local GPUs are slower than prod, so default the LLM node-timeout scale up
+    // (overridable from the host env / root .env).
+    LLM_NODE_TIMEOUT_SCALE: hostEnv.LLM_NODE_TIMEOUT_SCALE ?? "6",
   });
   const clientSupabaseEnv = definedEntries({
     VITE_SUPABASE_URL: supabaseUrl,

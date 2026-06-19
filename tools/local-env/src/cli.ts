@@ -47,11 +47,28 @@ async function main(): Promise<void> {
   exit(mode ? 1 : 0);
 }
 
+/**
+ * Load host overrides from a gitignored root `.env` (e.g. TAVILY_API_KEY,
+ * LLM_NODE_TIMEOUT_SCALE) into process.env so buildRuntimeEnv picks them up.
+ * Existing process.env values win — the file is a fallback, never an override.
+ */
+async function loadRootDotEnv(repoRoot: string): Promise<void> {
+  try {
+    const parsed = parseEnvFile(await readFile(join(repoRoot, ".env"), "utf8"));
+    for (const [key, value] of Object.entries(parsed)) {
+      if (process.env[key] === undefined) process.env[key] = value;
+    }
+  } catch (error) {
+    if ((error as { code?: string }).code !== "ENOENT") throw error;
+  }
+}
+
 async function buildConfig(
   mode: "dev" | "e2e",
   e2eCommand: string[] = DEFAULT_E2E_COMMAND,
 ): Promise<EnvironmentConfig> {
   const repoRoot = resolveRepoRoot({ cwd: cwd(), env: process.env });
+  await loadRootDotEnv(repoRoot);
   const worktreeId = deriveWorktreeId(repoRoot);
   const ports = await allocateLocalPorts(worktreeId);
   await ensureLocalSupabaseStarted(repoRoot, process.env);
@@ -97,6 +114,13 @@ async function runDev(): Promise<void> {
       cwd: config.repoRoot,
       env: config.runtimeEnv.api,
       label: "api",
+    }),
+    // Report-generation worker: consumes the BullMQ queue. Without it, submitted
+    // reports sit in `queued` forever.
+    startManagedProcess(["pnpm", "--filter", "@repo/api", "dev:worker"], {
+      cwd: config.repoRoot,
+      env: config.runtimeEnv.api,
+      label: "worker",
     }),
     startManagedProcess(
       buildViteDevCommand("@repo/web", config.runtimeEnv.web.VITE_WEB_PORT ?? "5173"),
