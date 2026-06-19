@@ -1,8 +1,14 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { delimiter, extname, join } from "node:path";
+import { posix as posixPath, win32 as win32Path } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { mergeEnv } from "./env";
+
+// Pick a path implementation by the *target* platform, not the host OS, so the
+// Windows command-resolution logic behaves identically on the Linux CI runner.
+function pathFor(platform: NodeJS.Platform) {
+  return platform === "win32" ? win32Path : posixPath;
+}
 
 export type ManagedProcess = {
   stop: () => Promise<void>;
@@ -96,7 +102,8 @@ export function resolveExecutableCommand(
 ): string | undefined {
   if (!bin) return undefined;
 
-  if (platform !== "win32" || extname(bin) !== "") {
+  const p = pathFor(platform);
+  if (platform !== "win32" || p.extname(bin) !== "") {
     return bin;
   }
 
@@ -106,9 +113,9 @@ export function resolveExecutableCommand(
     .filter(Boolean)
     .map((value) => value.toLowerCase());
 
-  for (const directory of pathValue.split(delimiter).filter(Boolean)) {
+  for (const directory of pathValue.split(p.delimiter).filter(Boolean)) {
     for (const extension of executableExtensions) {
-      const candidate = join(directory, `${bin}${extension}`);
+      const candidate = p.join(directory, `${bin}${extension}`);
       if (fileExists(candidate)) {
         return candidate;
       }
@@ -137,7 +144,7 @@ export function shouldUseWindowsShell(command: string, platform = process.platfo
     return false;
   }
 
-  const extension = extname(command).toLowerCase();
+  const extension = win32Path.extname(command).toLowerCase();
   return extension === ".cmd" || extension === ".bat";
 }
 
@@ -158,7 +165,13 @@ export function buildSpawnCommand(options: {
 
   const powerShell =
     options.env.SystemRoot && options.env.SystemRoot.length > 0
-      ? join(options.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+      ? win32Path.join(
+          options.env.SystemRoot,
+          "System32",
+          "WindowsPowerShell",
+          "v1.0",
+          "powershell.exe",
+        )
       : "powershell.exe";
   const invocationParts = [
     "&",
