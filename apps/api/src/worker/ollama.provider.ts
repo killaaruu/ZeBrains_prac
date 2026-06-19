@@ -1,9 +1,13 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { ZodType } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 const OLLAMA_GENERATE_PATH = "/api/generate";
 const OLLAMA_REQUEST_TIMEOUT_MS = 120_000;
+// Cap output so a runaway model can't be cut off mid-JSON (gemma returned an
+// "Unterminated string"); large enough for a full market analysis.
+const OLLAMA_NUM_PREDICT = 4_096;
 
 export interface OllamaGenerateOptions {
   timeoutMs?: number;
@@ -74,7 +78,10 @@ export class OllamaProvider {
         model,
         prompt,
         stream: false,
-        ...(schema ? { format: "json" } : {}),
+        // Structured outputs: constrain generation to the exact schema instead of
+        // free-form `format: "json"`, so small local models conform reliably.
+        ...(schema ? { format: zodToJsonSchema(schema, { $refStrategy: "none" }) } : {}),
+        options: { temperature: 0, num_predict: OLLAMA_NUM_PREDICT },
       }),
       signal: AbortSignal.timeout(options?.timeoutMs ?? OLLAMA_REQUEST_TIMEOUT_MS),
     });

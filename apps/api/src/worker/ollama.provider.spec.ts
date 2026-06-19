@@ -39,30 +39,22 @@ describe("OllamaProvider", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      "http://ollama.local:11434/api/generate",
-      expect.objectContaining({
-        body: JSON.stringify({
-          model: "qwen2.5:7b",
-          prompt: "Return a report",
-          stream: false,
-          format: "json",
-        }),
-      }),
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "http://ollama.local:11434/api/generate",
-      expect.objectContaining({
-        body: JSON.stringify({
-          model: "gemma4:12b-it-qat",
-          prompt: "Return a report",
-          stream: false,
-          format: "json",
-        }),
-      }),
-    );
+    const bodyOf = (call: number) =>
+      JSON.parse((fetchMock.mock.calls[call]?.[1] as { body: string }).body);
+
+    const firstBody = bodyOf(0);
+    expect(firstBody).toMatchObject({
+      model: "qwen2.5:7b",
+      prompt: "Return a report",
+      stream: false,
+      options: { temperature: 0, num_predict: 4_096 },
+    });
+    // Structured outputs: `format` carries the JSON schema, not the string "json".
+    expect(firstBody.format).toMatchObject({ type: "object" });
+
+    const secondBody = bodyOf(1);
+    expect(secondBody).toMatchObject({ model: "gemma4:12b-it-qat", prompt: "Return a report" });
+    expect(secondBody.format).toMatchObject({ type: "object" });
     expect(warnSpy).toHaveBeenCalled();
   });
 
