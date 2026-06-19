@@ -9,6 +9,7 @@ describe("ReportsController", () => {
     create: ReturnType<typeof vi.fn>;
     getById: ReturnType<typeof vi.fn>;
     list: ReturnType<typeof vi.fn>;
+    remove: ReturnType<typeof vi.fn>;
   };
 
   const user: RequestUser = {
@@ -25,6 +26,7 @@ describe("ReportsController", () => {
       create: vi.fn().mockResolvedValue({ id: "00000000-0000-4000-8000-000000000000" }),
       getById: vi.fn(),
       list: vi.fn(),
+      remove: vi.fn().mockResolvedValue(undefined),
     };
     controller = new ReportsController(service as unknown as ReportsService);
   });
@@ -50,5 +52,10 @@ describe("ReportsController", () => {
 
     await expect(controller.getById(user, "report-1")).resolves.toEqual({ id: "report-1" });
     expect(service.getById).toHaveBeenCalledWith("report-1", user.id);
+  });
+
+  it("deletes one report scoped to the current user", async () => {
+    await expect(controller.remove(user, "report-1")).resolves.toBeUndefined();
+    expect(service.remove).toHaveBeenCalledWith("report-1", user.id);
   });
 });

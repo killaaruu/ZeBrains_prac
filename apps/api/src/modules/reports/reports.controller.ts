@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { CreateReport, RequestUser } from "@repo/shared";
 import { createReportSchema } from "@repo/shared";
@@ -33,5 +33,11 @@ export class ReportsController {
   @ApiOperation({ summary: "Get one current-user report" })
   getById(@CurrentUser() user: RequestUser, @Param("id") id: string) {
     return this.service.getById(id, user.id);
+  }
+
+  @Delete(":id")
+  @ApiOperation({ summary: "Delete one current-user report" })
+  remove(@CurrentUser() user: RequestUser, @Param("id") id: string) {
+    return this.service.remove(id, user.id);
   }
 }

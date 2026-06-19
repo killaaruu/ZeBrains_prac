@@ -117,4 +117,24 @@ describe("ReportsService", () => {
     const wherePredicate = (fns.selectWhere.mock.calls.at(0) as unknown[] | undefined)?.[0];
     expect(collectColumnNames(wherePredicate)).toEqual(expect.arrayContaining(["id", "user_id"]));
   });
+
+  it("deletes a report scoped to the current user", async () => {
+    const execute = vi.fn().mockResolvedValue([{ id: queuedRow.id }]);
+    const returning = vi.fn(() => ({ execute }));
+    const where = vi.fn(() => ({ returning }));
+    const db = {
+      insert: vi.fn(),
+      select: vi.fn(),
+      delete: vi.fn(() => ({ where })),
+    };
+    const service = new ReportsService(db as never, queue as never);
+
+    await expect(
+      service.remove(queuedRow.id, "11111111-1111-4111-8111-111111111111"),
+    ).resolves.toBeUndefined();
+
+    expect(db.delete).toHaveBeenCalledOnce();
+    const wherePredicate = (where.mock.calls.at(0) as unknown[] | undefined)?.[0];
+    expect(collectColumnNames(wherePredicate)).toEqual(expect.arrayContaining(["id", "user_id"]));
+  });
 });
