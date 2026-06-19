@@ -47,32 +47,53 @@ function renderStatusBadge(status: ReportStatus) {
   );
 }
 
+function getSourceLabel(source: string) {
+  try {
+    return new URL(source).hostname.replace(/^www\./u, "");
+  } catch {
+    return source;
+  }
+}
+
 function renderMarket(items: ReportResult["global_market"] | ReportResult["ru_market"]) {
   if (items === null || items === undefined) {
-    return <p className="text-sm text-muted-foreground">No validated findings yet.</p>;
+    return (
+      <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-5">
+        <p className="text-sm text-muted-foreground">No validated findings yet.</p>
+      </div>
+    );
   }
 
   if (typeof items === "string") {
-    return <p className="text-sm text-muted-foreground">{items}</p>;
+    return (
+      <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-5">
+        <p className="text-sm text-muted-foreground">{items}</p>
+      </div>
+    );
   }
 
   return (
     <ul className="space-y-3">
       {items.map((item) => (
-        <li key={`${item.company}-${item.product}`} className="rounded-lg border p-3">
-          <p className="font-medium">{item.product}</p>
-          <p className="text-sm text-muted-foreground">{item.company}</p>
-          <p className="mt-2 text-sm">{item.effects}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+        <li
+          key={`${item.company}-${item.product}`}
+          className="rounded-xl border bg-card/70 p-4 shadow-sm"
+        >
+          <div className="space-y-1">
+            <p className="font-medium">{item.product}</p>
+            <p className="text-sm text-muted-foreground">{item.company}</p>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-foreground/90">{item.effects}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
             {item.sources.map((source) => (
               <a
                 key={source}
                 href={source}
                 target="_blank"
                 rel="noreferrer"
-                className="text-sm text-[var(--brand)] underline underline-offset-4"
+                className="inline-flex items-center rounded-full border border-[color:var(--brand)]/30 bg-[color:var(--brand)]/10 px-3 py-1 text-sm font-medium text-[var(--brand)] transition-colors hover:border-[color:var(--brand)] hover:bg-[color:var(--brand)]/15"
               >
-                Source
+                {getSourceLabel(source)}
               </a>
             ))}
           </div>
@@ -241,12 +262,14 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                       <CardHeader>
                         <CardTitle className="text-base">Arguments for</CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-2">
-                        {selectedReport.result.sustainability.arguments_for.map((item) => (
-                          <p key={item} className="text-sm">
-                            {item}
-                          </p>
-                        ))}
+                      <CardContent>
+                        <ul className="space-y-2">
+                          {selectedReport.result.sustainability.arguments_for.map((item) => (
+                            <li key={item} className="text-sm text-foreground/90">
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
                       </CardContent>
                     </Card>
 
@@ -254,12 +277,14 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                       <CardHeader>
                         <CardTitle className="text-base">Arguments against</CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-2">
-                        {selectedReport.result.sustainability.arguments_against.map((item) => (
-                          <p key={item} className="text-sm">
-                            {item}
-                          </p>
-                        ))}
+                      <CardContent>
+                        <ul className="space-y-2">
+                          {selectedReport.result.sustainability.arguments_against.map((item) => (
+                            <li key={item} className="text-sm text-foreground/90">
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
                       </CardContent>
                     </Card>
                   </div>
