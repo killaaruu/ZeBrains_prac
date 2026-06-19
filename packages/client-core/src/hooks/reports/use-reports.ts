@@ -12,5 +12,9 @@ export function useReports({ fetcher, enabled }: UseReportsOptions) {
     queryKey: reportKeys.list(),
     queryFn: fetcher,
     enabled,
+    select: (reports) =>
+      [...reports].sort(
+        (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+      ),
   });
 }
