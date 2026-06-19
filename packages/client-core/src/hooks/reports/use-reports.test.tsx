@@ -42,4 +42,28 @@ describe("useReports", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(queryClient.getQueryCache().find({ queryKey: reportKeys.list() })).toBeDefined();
   });
+
+  it("sorts reports newest first before exposing them to consumers", async () => {
+    const olderReport: Report = {
+      ...report,
+      id: "550e8400-e29b-41d4-a716-446655440001",
+      topic: "Older trend",
+      createdAt: "2026-06-16T12:00:00.000Z",
+      updatedAt: "2026-06-16T12:00:00.000Z",
+    };
+    const newerReport: Report = {
+      ...report,
+      id: "550e8400-e29b-41d4-a716-446655440002",
+      topic: "Newer trend",
+      createdAt: "2026-06-18T12:00:00.000Z",
+      updatedAt: "2026-06-18T12:00:00.000Z",
+    };
+    const fetcher = vi.fn().mockResolvedValue([olderReport, newerReport]);
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useReports({ fetcher }), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual([newerReport, olderReport]);
+    });
+  });
 });

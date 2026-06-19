@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./index";
@@ -79,5 +79,16 @@ describe("Dashboard", () => {
     expect(screen.getAllByText("AI coding assistants")).toHaveLength(3);
     expect(screen.getByText("Sustainability score")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /generate report/i })).toBeInTheDocument();
+  });
+
+  it("re-opens a report when the user clicks a history row", () => {
+    render(<Dashboard reportId="550e8400-e29b-41d4-a716-446655440000" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /ai coding assistants/i }));
+
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: "/dashboard",
+      search: { reportId: "550e8400-e29b-41d4-a716-446655440000" },
+    });
   });
 });
