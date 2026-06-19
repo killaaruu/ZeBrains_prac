@@ -1,4 +1,5 @@
 import { SupabaseAuthService } from "@repo/services-client/auth";
+import { SupabaseRealtimeService } from "@repo/services-client/realtime";
 import { createClient } from "@supabase/supabase-js";
 import { apiClient } from "./api-client";
 import { LocalDevAuthService } from "./local-dev-auth-service";
@@ -13,6 +14,7 @@ if (!supabaseUrl || !supabasePublishableKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey);
+export const realtimeService = new SupabaseRealtimeService(supabase);
 
 export const authService =
   import.meta.env.VITE_LOCAL_DEV_AUTH_ENABLED === "true"

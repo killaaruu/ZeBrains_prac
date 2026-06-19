@@ -1,5 +1,5 @@
-import { useReport, useReports } from "@repo/client-core";
-import type { Report, ReportResult } from "@repo/shared";
+import { useReport, useReportRealtime, useReports } from "@repo/client-core";
+import type { Report, ReportResult, ReportStatus } from "@repo/shared";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Header } from "@/shared/components/layout/header";
@@ -7,12 +7,45 @@ import { Main } from "@/shared/components/layout/main";
 import { ProfileDropdown } from "@/shared/components/profile-dropdown";
 import { ThemeSwitch } from "@/shared/components/theme-switch";
 import { apiClient } from "@/shared/lib/api-client";
+import { realtimeService } from "@/shared/lib/supabase";
 import { Badge } from "@/shared/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
 import { TopicForm } from "./components/topic-form";
 
 const listReports = () => apiClient.get<Report[]>("/reports");
 const getReport = (id: string) => apiClient.get<Report>(`/reports/${id}`);
+const reportStatusMeta: Record<
+  ReportStatus,
+  { label: string; badgeClassName: string; pendingCopy?: string }
+> = {
+  queued: {
+    label: "В очереди",
+    badgeClassName: "border-slate-300 bg-slate-100 text-slate-700",
+    pendingCopy: "Report is queued for research. Live status updates will appear here.",
+  },
+  thinking: {
+    label: "Думает",
+    badgeClassName: "border-amber-300 bg-amber-100 text-amber-700",
+    pendingCopy: "The agents are analyzing sources now. Live status updates will appear here.",
+  },
+  done: {
+    label: "Готово",
+    badgeClassName: "border-emerald-300 bg-emerald-100 text-emerald-700",
+  },
+  error: {
+    label: "Ошибка",
+    badgeClassName: "border-rose-300 bg-rose-100 text-rose-700",
+  },
+};
+
+function renderStatusBadge(status: ReportStatus) {
+  const meta = reportStatusMeta[status];
+  return (
+    <Badge variant="outline" className={meta.badgeClassName}>
+      {meta.label}
+    </Badge>
+  );
+}
 
 function renderMarket(items: ReportResult["global_market"] | ReportResult["ru_market"]) {
   if (items === null || items === undefined) {
@@ -61,6 +94,7 @@ export function Dashboard({ reportId = null }: DashboardProps) {
     fetcher: getReport,
     enabled: reportId !== null,
   });
+  useReportRealtime({ reportId, realtimeService });
 
   useEffect(() => {
     if (!reportId && reports.data?.[0]) {
@@ -73,6 +107,7 @@ export function Dashboard({ reportId = null }: DashboardProps) {
 
   const selectedReport =
     detail.data ?? reports.data?.find((report) => report.id === reportId) ?? null;
+  const selectedStatusMeta = selectedReport ? reportStatusMeta[selectedReport.status] : null;
 
   return (
     <>
@@ -129,7 +164,7 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                       <p className="font-medium">{report.topic}</p>
                       <p className="text-sm text-muted-foreground">{report.createdAt}</p>
                     </div>
-                    <Badge variant="outline">{report.status}</Badge>
+                    {renderStatusBadge(report.status)}
                   </button>
                 ))}
               </CardContent>
@@ -141,7 +176,7 @@ export function Dashboard({ reportId = null }: DashboardProps) {
               <CardTitle>{selectedReport?.topic ?? "Latest report"}</CardTitle>
               <CardDescription>
                 {selectedReport
-                  ? `Status: ${selectedReport.status}`
+                  ? `Status: ${selectedReport.status} (${selectedStatusMeta?.label})`
                   : "Select a report from history."}
               </CardDescription>
             </CardHeader>
@@ -150,11 +185,29 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                 <p className="text-sm text-muted-foreground">No report selected yet.</p>
               )}
 
-              {selectedReport && selectedReport.result === null && (
-                <p className="text-sm text-muted-foreground">
-                  Report is still processing. Results will appear here when validation completes.
-                </p>
+              {selectedReport && (
+                <div className="flex items-center gap-3 rounded-lg border border-dashed px-4 py-3">
+                  {renderStatusBadge(selectedReport.status)}
+                  <p className="text-sm text-muted-foreground">
+                    Live updates are enabled for this report.
+                  </p>
+                </div>
               )}
+
+              {selectedReport && selectedReport.status === "error" && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+                  {selectedReport.error ?? "Report generation failed. Try a different topic."}
+                </div>
+              )}
+
+              {selectedReport &&
+                selectedReport.result === null &&
+                selectedReport.status !== "error" && (
+                  <p className="text-sm text-muted-foreground">
+                    {selectedStatusMeta?.pendingCopy ??
+                      "Report is still processing. Results will appear here when validation completes."}
+                  </p>
+                )}
 
               {selectedReport?.result && (
                 <>
