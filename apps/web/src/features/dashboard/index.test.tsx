@@ -1,11 +1,13 @@
 import { marketNotFound, type Report, ruMarketNotFound } from "@repo/shared";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./index";
 
 const mockNavigate = vi.fn();
 const mockUseReportRealtime = vi.fn();
+const mockDeleteMutate = vi.fn();
 
 vi.mock("@/shared/components/layout/header", () => ({
   Header: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -22,6 +24,17 @@ vi.mock("@/shared/components/theme-switch", () => ({
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => mockNavigate,
 }));
+
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    useMutation: () => ({
+      mutate: mockDeleteMutate,
+      isPending: false,
+    }),
+  };
+});
 
 const reportList: Report[] = [
   {
@@ -85,6 +98,7 @@ describe("Dashboard", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
     mockUseReportRealtime.mockReset();
+    mockDeleteMutate.mockReset();
     mockUseReports.mockReturnValue({
       data: reportList,
       isLoading: false,
@@ -178,5 +192,86 @@ describe("Dashboard", () => {
 
     expect(screen.getByText(marketNotFound)).toBeInTheDocument();
     expect(screen.getByText(ruMarketNotFound)).toBeInTheDocument();
+  });
+
+  it("collapses long market evidence with explicit expand and collapse actions", async () => {
+    const user = userEvent.setup();
+    const longEffects = Array.from({ length: 12 }, () => "Electric vehicles keep scaling.")
+      .join(" ")
+      .trim();
+
+    mockUseReport.mockReturnValue({
+      data: {
+        ...selectedDoneReport,
+        result: {
+          ...selectedDoneReport.result!,
+          global_market: [
+            {
+              product: "EV market overview",
+              company: "Counterpoint",
+              effects: longEffects,
+              sources: ["https://example.com/ev-market"],
+            },
+          ],
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<Dashboard reportId="550e8400-e29b-41d4-a716-446655440000" />);
+
+    expect(screen.getByRole("button", { name: "Открыть полностью" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Свернуть" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Electric vehicles keep scaling/)).toHaveClass("line-clamp-4");
+
+    await user.click(screen.getByRole("button", { name: "Открыть полностью" }));
+
+    expect(screen.getByRole("button", { name: "Свернуть" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть полностью" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Electric vehicles keep scaling/)).not.toHaveClass("line-clamp-4");
+
+    await user.click(screen.getByRole("button", { name: "Свернуть" }));
+
+    expect(screen.getByRole("button", { name: "Открыть полностью" })).toBeInTheDocument();
+    expect(screen.getByText(/Electric vehicles keep scaling/)).toHaveClass("line-clamp-4");
+  });
+
+  it("filters report history, shows duration, and deletes reports", async () => {
+    const user = userEvent.setup();
+    mockUseReports.mockReturnValue({
+      data: [
+        selectedDoneReport,
+        {
+          ...selectedDoneReport,
+          id: "report-2",
+          topic: "Battery recycling",
+          createdAt: "2026-06-17T12:00:00.000Z",
+          updatedAt: "2026-06-17T12:02:30.000Z",
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<Dashboard reportId="550e8400-e29b-41d4-a716-446655440000" />);
+
+    expect(screen.getByText("5m")).toBeInTheDocument();
+    expect(screen.getByText("2m 30s")).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText("Найти отчет"), "battery");
+
+    expect(screen.getByText("Battery recycling")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /AI coding assistants 2026-06-17T12:00:00.000Z Готово/i,
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Удалить отчет Battery recycling" }));
+    expect(mockDeleteMutate).toHaveBeenCalledWith(
+      "report-2",
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
   });
 });

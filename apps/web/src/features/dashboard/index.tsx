@@ -1,7 +1,8 @@
 import { useReport, useReportRealtime, useReports } from "@repo/client-core";
 import type { Report, ReportResult, ReportStatus } from "@repo/shared";
+import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Header } from "@/shared/components/layout/header";
 import { Main } from "@/shared/components/layout/main";
 import { ProfileDropdown } from "@/shared/components/profile-dropdown";
@@ -9,11 +10,14 @@ import { ThemeSwitch } from "@/shared/components/theme-switch";
 import { apiClient } from "@/shared/lib/api-client";
 import { realtimeService } from "@/shared/lib/supabase";
 import { Badge } from "@/shared/ui/badge";
+import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
+import { Input } from "@/shared/ui/input";
 import { TopicForm } from "./components/topic-form";
 
 const listReports = () => apiClient.get<Report[]>("/reports");
 const getReport = (id: string) => apiClient.get<Report>(`/reports/${id}`);
+const deleteReport = (id: string) => apiClient.delete<void>(`/reports/${id}`);
 const reportStatusMeta: Record<
   ReportStatus,
   { label: string; badgeClassName: string; pendingCopy?: string }
@@ -55,7 +59,77 @@ function getSourceLabel(source: string) {
   }
 }
 
-function renderMarket(items: ReportResult["global_market"] | ReportResult["ru_market"]) {
+function formatDuration(ms: number) {
+  const totalSeconds = Math.max(0, Math.round(ms / 1_000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes === 0) {
+    return `${seconds}s`;
+  }
+
+  if (seconds === 0) {
+    return `${minutes}m`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
+function getReportDuration(report: Pick<Report, "createdAt" | "updatedAt">) {
+  const createdAt = Date.parse(report.createdAt);
+  const updatedAt = Date.parse(report.updatedAt);
+
+  if (Number.isNaN(createdAt) || Number.isNaN(updatedAt) || updatedAt < createdAt) {
+    return null;
+  }
+
+  return formatDuration(updatedAt - createdAt);
+}
+
+interface ExpandableTextProps {
+  id: string;
+  text: string;
+  expanded: boolean;
+  onToggle: (id: string) => void;
+}
+
+function ExpandableText({ id, text, expanded, onToggle }: ExpandableTextProps) {
+  const shouldCollapse = text.trim().length > 220;
+
+  return (
+    <div className="space-y-2">
+      <p
+        className={
+          expanded || !shouldCollapse
+            ? "text-sm leading-6 text-foreground/90"
+            : "line-clamp-4 text-sm leading-6 text-foreground/90"
+        }
+      >
+        {text}
+      </p>
+      {shouldCollapse && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto px-0 text-[var(--brand)]"
+          onClick={() => onToggle(id)}
+        >
+          {expanded ? "Свернуть" : "Открыть полностью"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+interface RenderMarketOptions {
+  expandedItems: Record<string, boolean>;
+  onToggle: (id: string) => void;
+}
+
+function renderMarket(
+  items: ReportResult["global_market"] | ReportResult["ru_market"],
+  { expandedItems, onToggle }: RenderMarketOptions,
+) {
   if (items === null || items === undefined) {
     return (
       <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-5">
@@ -83,7 +157,14 @@ function renderMarket(items: ReportResult["global_market"] | ReportResult["ru_ma
             <p className="font-medium">{item.product}</p>
             <p className="text-sm text-muted-foreground">{item.company}</p>
           </div>
-          <p className="mt-3 text-sm leading-6 text-foreground/90">{item.effects}</p>
+          <div className="mt-3">
+            <ExpandableText
+              id={`${item.company}-${item.product}`}
+              text={item.effects}
+              expanded={Boolean(expandedItems[`${item.company}-${item.product}`])}
+              onToggle={onToggle}
+            />
+          </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {item.sources.map((source) => (
               <a
@@ -109,12 +190,15 @@ interface DashboardProps {
 
 export function Dashboard({ reportId = null }: DashboardProps) {
   const navigate = useNavigate();
+  const [historyFilter, setHistoryFilter] = useState("");
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const reports = useReports({ fetcher: listReports });
   const detail = useReport({
     id: reportId ?? "",
     fetcher: getReport,
     enabled: reportId !== null,
   });
+  const remove = useMutation({ mutationFn: deleteReport });
   useReportRealtime({ reportId, realtimeService });
 
   useEffect(() => {
@@ -129,6 +213,16 @@ export function Dashboard({ reportId = null }: DashboardProps) {
   const selectedReport =
     detail.data ?? reports.data?.find((report) => report.id === reportId) ?? null;
   const selectedStatusMeta = selectedReport ? reportStatusMeta[selectedReport.status] : null;
+  const selectedDuration = selectedReport ? getReportDuration(selectedReport) : null;
+  const filteredReports =
+    reports.data?.filter((report) => {
+      const haystack = `${report.topic} ${report.result?.trend_name ?? ""}`.toLowerCase();
+      return haystack.includes(historyFilter.trim().toLowerCase());
+    }) ?? [];
+
+  const toggleExpandedItem = (id: string) => {
+    setExpandedItems((current) => ({ ...current, [id]: !current[id] }));
+  };
 
   return (
     <>
@@ -158,6 +252,11 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                 <CardDescription>{reports.data?.length ?? 0} reports</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                <Input
+                  value={historyFilter}
+                  onChange={(event) => setHistoryFilter(event.target.value)}
+                  placeholder="Найти отчет"
+                />
                 {reports.isLoading && (
                   <p className="text-sm text-muted-foreground">Loading reports...</p>
                 )}
@@ -169,32 +268,82 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                     No reports yet. Submit your first topic.
                   </p>
                 )}
-                {reports.data?.map((report) => (
-                  <button
-                    key={report.id}
-                    type="button"
-                    onClick={() =>
-                      navigate({
-                        to: "/dashboard",
-                        search: { reportId: report.id },
-                      })
-                    }
-                    className="flex w-full items-start justify-between rounded-lg border p-3 text-left transition-colors hover:border-[var(--brand)]"
-                  >
-                    <div>
-                      <p className="font-medium">{report.topic}</p>
-                      <p className="text-sm text-muted-foreground">{report.createdAt}</p>
+                {reports.data?.length !== 0 && filteredReports.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Ничего не найдено по этому фильтру.
+                  </p>
+                )}
+                {filteredReports.map((report) => {
+                  const duration = getReportDuration(report);
+
+                  return (
+                    <div
+                      key={report.id}
+                      className="flex items-start gap-2 rounded-lg border p-3 transition-colors hover:border-[var(--brand)]"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate({
+                            to: "/dashboard",
+                            search: { reportId: report.id },
+                          })
+                        }
+                        className="flex min-w-0 flex-1 items-start justify-between text-left"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium">{report.topic}</p>
+                          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                            <span>{report.createdAt}</span>
+                            {duration && (
+                              <>
+                                <span>•</span>
+                                <span>{duration}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        {renderStatusBadge(report.status)}
+                      </button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                        aria-label={`Удалить отчет ${report.topic}`}
+                        onClick={() =>
+                          remove.mutate(report.id, {
+                            onSuccess: () => {
+                              if (report.id === reportId) {
+                                navigate({ to: "/dashboard", search: {} });
+                              }
+                            },
+                          })
+                        }
+                        disabled={remove.isPending}
+                      >
+                        Удалить
+                      </Button>
                     </div>
-                    {renderStatusBadge(report.status)}
-                  </button>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle>{selectedReport?.topic ?? "Latest report"}</CardTitle>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{selectedReport?.topic ?? "Latest report"}</CardTitle>
+                  {selectedDuration && (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Время обработки: {selectedDuration}
+                    </p>
+                  )}
+                </div>
+                {selectedReport && renderStatusBadge(selectedReport.status)}
+              </div>
               <CardDescription>
                 {selectedReport
                   ? `Status: ${selectedReport.status} (${selectedStatusMeta?.label})`
@@ -248,12 +397,18 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                   <div className="grid gap-6 lg:grid-cols-2">
                     <section className="space-y-3">
                       <h2 className="text-lg font-semibold">Global market</h2>
-                      {renderMarket(selectedReport.result.global_market)}
+                      {renderMarket(selectedReport.result.global_market, {
+                        expandedItems,
+                        onToggle: toggleExpandedItem,
+                      })}
                     </section>
 
                     <section className="space-y-3">
                       <h2 className="text-lg font-semibold">RU market</h2>
-                      {renderMarket(selectedReport.result.ru_market)}
+                      {renderMarket(selectedReport.result.ru_market, {
+                        expandedItems,
+                        onToggle: toggleExpandedItem,
+                      })}
                     </section>
                   </div>
 

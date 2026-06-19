@@ -70,4 +70,16 @@ export class ReportsService {
     if (!row) throw new NotFoundException(`Report ${id} not found`);
     return mapReportRow(row);
   }
+
+  async remove(id: string, userId: string): Promise<void> {
+    const deletedRows = await this.db
+      .delete(reports)
+      .where(and(eq(reports.id, id), eq(reports.userId, userId)))
+      .returning({ id: reports.id })
+      .execute();
+
+    if (deletedRows.length === 0) {
+      throw new NotFoundException(`Report ${id} not found`);
+    }
+  }
 }
