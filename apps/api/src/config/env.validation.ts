@@ -61,6 +61,12 @@ const envSchema = z
         ),
     ),
     TAVILY_API_KEY: optionalString,
+    // Multiplier on per-node LLM timeouts. >1 for slow local GPUs (e.g. 6 GB
+    // laptops) so cold-start inference does not trip false "timed out" errors.
+    LLM_NODE_TIMEOUT_SCALE: z.preprocess(
+      emptyStringToUndefined,
+      z.coerce.number().positive().default(1),
+    ),
 
     // Optional — Read replica
     DATABASE_READONLY_URL: optionalString,

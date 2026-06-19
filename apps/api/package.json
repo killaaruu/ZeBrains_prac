@@ -10,6 +10,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "start:worker": "node dist/worker",
+    "dev:worker": "nest start --watch --entryFile worker",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests --reporter=dot --pool=threads --no-isolate --maxWorkers=1 --no-file-parallelism",
     "test:watch": "vitest",

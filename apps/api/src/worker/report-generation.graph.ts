@@ -22,7 +22,11 @@ export interface ReportGenerationInput {
   topic: string;
 }
 
-const plannerOutputSchema = z.array(z.string().trim().min(1)).min(1);
+// Local Ollama models in `format: "json"` mode reliably return an OBJECT, not a
+// bare array, so the planner asks for `{ queries: [...] }` and unwraps it.
+const plannerOutputSchema = z.object({
+  queries: z.array(z.string().trim().min(1)).min(1),
+});
 
 const analysisSchema = z.object({
   trend_name: z.string().trim().min(1),
@@ -43,6 +47,16 @@ const NODE_TIMEOUT_MS = {
   "sustainability-scorer": 15_000,
   assembler: 10_000,
 } as const;
+
+/**
+ * Per-node timeouts above are tuned for proper GPU hardware. On a slow local GPU
+ * (e.g. a 6 GB laptop) cold-start LLM inference can exceed them, so allow scaling
+ * them up via `LLM_NODE_TIMEOUT_SCALE` (default 1 — no change in prod).
+ */
+export function resolveNodeTimeoutScale(raw: string | undefined): number {
+  const scale = Number(raw);
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
 
 const ReportGenerationState = Annotation.Root({
   reportId: Annotation<string>(),
@@ -72,11 +86,17 @@ type NodeTimings = Partial<Record<GraphNodeName, number>>;
 @Injectable()
 export class ReportGenerationGraph {
   private readonly logger = new Logger(ReportGenerationGraph.name);
+  private readonly timeoutScale = resolveNodeTimeoutScale(process.env.LLM_NODE_TIMEOUT_SCALE);
 
   constructor(
     private readonly ollamaProvider: OllamaProvider,
     private readonly tavilyResearchService: TavilyResearchService,
   ) {}
+
+  /** Per-node timeout, scaled for the current hardware via LLM_NODE_TIMEOUT_SCALE. */
+  private nodeTimeoutMs(node: GraphNodeName): number {
+    return Math.round(NODE_TIMEOUT_MS[node] * this.timeoutScale);
+  }
 
   async run(input: ReportGenerationInput): Promise<ReportResult> {
     const startedAt = Date.now();
@@ -150,18 +170,18 @@ export class ReportGenerationGraph {
    * downstream research step has explicit retrieval intents instead of one broad prompt.
    */
   private async plan(state: GraphState): Promise<Pick<GraphState, "subQueries">> {
-    const subQueries = await this.ollamaProvider.generate(
+    const { queries } = await this.ollamaProvider.generate(
       [
         "Planner",
         "Break the topic into concrete search sub-queries for a trend report.",
-        "Return a JSON array of short query strings.",
+        'Return JSON {"queries": [...]} — a non-empty array of short query strings.',
         state.guardedTopic,
       ].join("\n"),
       plannerOutputSchema,
-      { timeoutMs: NODE_TIMEOUT_MS.planner },
+      { timeoutMs: this.nodeTimeoutMs("planner") },
     );
 
-    return { subQueries };
+    return { subQueries: queries };
   }
 
   /**
@@ -214,7 +234,7 @@ export class ReportGenerationGraph {
         `Validated sources: ${JSON.stringify(state.validatedSources)}`,
       ].join("\n"),
       analysisSchema,
-      { timeoutMs: NODE_TIMEOUT_MS.analyst },
+      { timeoutMs: this.nodeTimeoutMs("analyst") },
     );
 
     return {
@@ -242,7 +262,7 @@ export class ReportGenerationGraph {
         `Analysis: ${JSON.stringify(state.analysis)}`,
       ].join("\n"),
       reportSustainabilitySchema,
-      { timeoutMs: NODE_TIMEOUT_MS["sustainability-scorer"] },
+      { timeoutMs: this.nodeTimeoutMs("sustainability-scorer") },
     );
 
     return { sustainability };
@@ -262,7 +282,7 @@ export class ReportGenerationGraph {
         `Sustainability: ${JSON.stringify(state.sustainability)}`,
       ].join("\n"),
       reportResultSchema,
-      { timeoutMs: NODE_TIMEOUT_MS.assembler },
+      { timeoutMs: this.nodeTimeoutMs("assembler") },
     );
     return { report };
   }
@@ -276,10 +296,11 @@ export class ReportGenerationGraph {
     const startedAt = Date.now();
 
     try {
+      const timeoutMs = this.nodeTimeoutMs(node);
       const result = await this.withTimeout(
         Promise.resolve().then(() => runner()),
-        NODE_TIMEOUT_MS[node],
-        `${node} node timed out after ${NODE_TIMEOUT_MS[node]}ms`,
+        timeoutMs,
+        `${node} node timed out after ${timeoutMs}ms`,
       );
       const durationMs = Date.now() - startedAt;
       nodeTimingsMs[node] = durationMs;
