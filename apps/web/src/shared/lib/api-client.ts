@@ -1,5 +1,4 @@
 import axios from "axios";
-import { authService } from "@/shared/lib/supabase";
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3111";
 
@@ -16,10 +15,16 @@ function isAuthBootstrapUrl(url: unknown) {
   return url === "/auth/me" || url === "/auth/register";
 }
 
+async function getAuthService() {
+  const { authService } = await import("./supabase");
+  return authService;
+}
+
 async function redirectToSignInOnUnauthorized(status: number, url: unknown) {
   if (status !== 401 || typeof window === "undefined") return;
   if (isAuthBootstrapUrl(url)) return;
   if (window.location.pathname === "/sign-in") return;
+  const authService = await getAuthService();
   const session = await authService.getSession();
   if (session?.accessToken) return;
 
@@ -66,6 +71,7 @@ function normalizeFetchUrl(input: Parameters<typeof fetch>[0]) {
 
 http.interceptors.request.use(
   async (config) => {
+    const authService = await getAuthService();
     const session = await authService.getSession();
     if (session?.accessToken) {
       config.headers.Authorization = `Bearer ${session.accessToken}`;
