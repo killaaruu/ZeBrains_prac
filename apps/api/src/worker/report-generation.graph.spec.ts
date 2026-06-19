@@ -1,6 +1,6 @@
 import { Logger } from "@nestjs/common";
 import type { ReportResult } from "@repo/shared";
-import { ruMarketNotFound } from "@repo/shared";
+import { marketNotFound, ruMarketNotFound } from "@repo/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const generatedReport: ReportResult = {
@@ -587,5 +587,39 @@ describe("ReportGenerationGraph", () => {
     await expect(validationPromise).resolves.toEqual({ validatedSources: [] });
 
     vi.useRealTimers();
+  });
+
+  it("degrades to a safe default when a node fails, instead of failing the report", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    const provider = {
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce({ queries: ["электромобили рынок"] }) // planner
+        .mockRejectedValueOnce(new Error("analyst model non-conformance")) // analyst FAILS
+        .mockResolvedValueOnce({ score: 5, arguments_for: ["a"], arguments_against: ["b"] }) // scorer
+        .mockResolvedValueOnce(generatedReport), // assembler
+    };
+    const tavilyResearchService = { search: vi.fn().mockResolvedValue([]) };
+    const graph = new ReportGenerationGraph(provider as never, tavilyResearchService as never);
+
+    // The failed analyst must NOT fail the whole report.
+    await expect(
+      graph.run({
+        reportId: "00000000-0000-4000-8000-000000000000",
+        userId: "11111111-1111-4111-8111-111111111111",
+        topic: "электромобили",
+      }),
+    ).resolves.toBeDefined();
+
+    // Pipeline continued past the failed node; the assembler saw the degraded
+    // analysis (markets fell back to "Не найдено").
+    expect(provider.generate).toHaveBeenCalledTimes(4);
+    expect(provider.generate).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining(marketNotFound),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 });

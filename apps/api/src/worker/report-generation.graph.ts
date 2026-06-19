@@ -107,24 +107,71 @@ export class ReportGenerationGraph {
         this.runNode("input-guard", input, nodeTimingsMs, () => this.guardInput(state)),
       )
       .addNode("planner", (state: GraphState) =>
-        this.runNode("planner", input, nodeTimingsMs, () => this.plan(state)),
+        this.runNode(
+          "planner",
+          input,
+          nodeTimingsMs,
+          () => this.plan(state),
+          () => ({ subQueries: [state.topic] }),
+        ),
       )
       .addNode("researcher", (state: GraphState) =>
-        this.runNode("researcher", input, nodeTimingsMs, () => this.research(state)),
+        this.runNode(
+          "researcher",
+          input,
+          nodeTimingsMs,
+          () => this.research(state),
+          () => ({ rawSources: [] }),
+        ),
       )
       .addNode("link-validator", (state: GraphState) =>
         this.runNode("link-validator", input, nodeTimingsMs, () => this.validateLinks(state)),
       )
       .addNode("analyst", (state: GraphState) =>
-        this.runNode("analyst", input, nodeTimingsMs, () => this.analyze(state)),
+        this.runNode(
+          "analyst",
+          input,
+          nodeTimingsMs,
+          () => this.analyze(state),
+          () => ({
+            analysis: {
+              trend_name: state.topic,
+              global_market: marketNotFound,
+              ru_market: ruMarketNotFound,
+            },
+          }),
+        ),
       )
       .addNode("sustainability-scorer", (state: GraphState) =>
-        this.runNode("sustainability-scorer", input, nodeTimingsMs, () =>
-          this.scoreSustainability(state),
+        this.runNode(
+          "sustainability-scorer",
+          input,
+          nodeTimingsMs,
+          () => this.scoreSustainability(state),
+          () => ({
+            sustainability: {
+              score: 5,
+              arguments_for: ["Недостаточно проверенных данных для уверенной оценки."],
+              arguments_against: ["Полный анализ не удалось завершить на доступных источниках."],
+            },
+          }),
         ),
       )
       .addNode("assembler", (state: GraphState) =>
-        this.runNode("assembler", input, nodeTimingsMs, () => this.assemble(state)),
+        this.runNode(
+          "assembler",
+          input,
+          nodeTimingsMs,
+          () => this.assemble(state),
+          () => ({
+            report: {
+              trend_name: state.analysis.trend_name,
+              global_market: state.analysis.global_market,
+              ru_market: state.analysis.ru_market,
+              sustainability: state.sustainability,
+            },
+          }),
+        ),
       )
       .addEdge(START, "input-guard")
       .addEdge("input-guard", "planner")
@@ -228,6 +275,7 @@ export class ReportGenerationGraph {
         "Analyst",
         "Split the validated evidence into global and Russia market findings.",
         "Return JSON with trend_name, global_market, and ru_market only.",
+        "Write every text value in the same language as the user topic (Russian topic → Russian text).",
         `If a market has no surviving sourced facts, return "${marketNotFound}" for that market.`,
         `If Russia has no implementations at all, return "${ruMarketNotFound}" for ru_market.`,
         state.guardedTopic,
@@ -258,6 +306,7 @@ export class ReportGenerationGraph {
         "Sustainability-Scorer",
         "Assess the trend's sustainability from 1 to 10.",
         "Return JSON with score, arguments_for, and arguments_against.",
+        "Write every argument in the same language as the user topic (Russian topic → Russian text).",
         state.guardedTopic,
         `Analysis: ${JSON.stringify(state.analysis)}`,
       ].join("\n"),
@@ -292,6 +341,10 @@ export class ReportGenerationGraph {
     input: ReportGenerationInput,
     nodeTimingsMs: NodeTimings,
     runner: () => Promise<T> | T,
+    // On a weak local GPU a node can fail (model non-conformance, timeout). When a
+    // fallback is given we degrade gracefully to an honest default instead of
+    // failing the whole report — so the user always gets a result, not an error.
+    fallback?: () => T,
   ): Promise<T> {
     const startedAt = Date.now();
 
@@ -324,9 +377,13 @@ export class ReportGenerationGraph {
           userId: input.userId,
           node,
           durationMs,
+          degraded: Boolean(fallback),
           error: error instanceof Error ? error.message : "Unknown graph node error",
         }),
       );
+      if (fallback) {
+        return fallback();
+      }
       throw error;
     }
   }
@@ -417,14 +474,28 @@ export class ReportGenerationGraph {
     return sanitizedItems.length > 0 ? sanitizedItems : marketNotFound;
   }
 
+  // Small local models rarely reproduce a source URL byte-for-byte (trailing
+  // slash, www, http vs https), so match on a normalized form instead of exact
+  // string — otherwise every market item gets dropped and reports read "Не найдено".
+  private normalizeUrl(value: string): string {
+    try {
+      const url = new URL(value);
+      return `${url.hostname.replace(/^www\./u, "")}${url.pathname.replace(/\/$/u, "")}`.toLowerCase();
+    } catch {
+      return value.trim().toLowerCase();
+    }
+  }
+
   private keepOnlyValidatedSources(
     items: readonly ReportMarketItem[],
     validatedSources: readonly TavilySourceCandidate[],
   ): ReportMarketItem[] {
-    const allowedUrls = new Set(validatedSources.map((source) => source.url));
+    const allowedUrls = new Set(validatedSources.map((source) => this.normalizeUrl(source.url)));
 
     return items.flatMap((item) => {
-      const sources = [...new Set(item.sources.filter((source) => allowedUrls.has(source)))];
+      const sources = [
+        ...new Set(item.sources.filter((source) => allowedUrls.has(this.normalizeUrl(source)))),
+      ];
 
       if (sources.length === 0) {
         return [];
