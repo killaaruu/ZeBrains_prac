@@ -1,0 +1,6 @@
+apiVersion: v2
+name: api
+description: NestJS API Helm chart
+type: application
+version: 0.1.0
+# appVersion is set dynamically via image.tag at deploy time.

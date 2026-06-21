@@ -126,6 +126,11 @@ db-migrate: ## ⬆️   Apply Drizzle migrations (needs DATABASE_URL; auto-set b
 	pnpm --filter @repo/db-backend migrate
 	@printf "✅  Migrations applied.\n"
 
+k3s-up: ## 🚀  Build, load, and deploy to local k3s (WSL2)
+	@printf "🚀  Building and deploying to local k3s...\n"
+	pwsh -File deploy/scripts/k3s-up.ps1
+	@printf "✅  TrendScout deployed to k3s.\n"
+
 db-studio: ## 🔬  Open Drizzle Studio
 	@printf "🔬  Opening Drizzle Studio...\n"
 	pnpm --filter @repo/db-backend studio

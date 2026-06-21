@@ -41,7 +41,25 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Output "PASS"
 
-Write-Output "=== Test 5: helm template - umbrella generates all resources ==="
+Write-Output "=== Test 5: helm lint - api subchart ==="
+$lint = helm lint (Join-Path $umbrella "charts\api") 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Output "FAIL: api subchart lint"
+    Write-Output $lint
+    exit 1
+}
+Write-Output "PASS"
+
+Write-Output "=== Test 6: helm lint - worker subchart ==="
+$lint = helm lint (Join-Path $umbrella "charts\worker") 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Output "FAIL: worker subchart lint"
+    Write-Output $lint
+    exit 1
+}
+Write-Output "PASS"
+
+Write-Output "=== Test 7: helm template - umbrella generates all resources ==="
 $rawOutput = helm template trendscout $umbrella 2>&1
 $output = $rawOutput -join "`n"
 if ($LASTEXITCODE -ne 0) {
@@ -59,6 +77,10 @@ $expected = @(
     @{Kind="Service"; Name="trendscout-ollama"}
     @{Kind="Deployment"; Name="trendscout-ollama"}
     @{Kind="Job"; Name=".*ollama-model-pull"}  # helm prefix + suffix
+    @{Kind="Deployment"; Name="trendscout-api"}
+    @{Kind="Service"; Name="trendscout-api"}
+    @{Kind="Deployment"; Name="trendscout-worker"}
+    @{Kind="Job"; Name="trendscout-api-migrate-"}  # migration Job from api subchart (name includes tag)
 )
 
 foreach ($item in $expected) {

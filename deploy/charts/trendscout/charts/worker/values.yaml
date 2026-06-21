@@ -1,0 +1,43 @@
+# Worker subchart values — same image as api, different entrypoint
+image:
+  repository: ghcr.io/your-org/api
+  tag: latest
+  pullPolicy: Always
+
+imagePullSecrets: []
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 3000
+
+env:
+  PORT: "3000"
+
+secretName: api-secrets
+
+resources:
+  requests:
+    memory: 512Mi
+    cpu: 250m
+  limits:
+    memory: 1Gi
+    cpu: "1"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
