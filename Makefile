@@ -110,6 +110,11 @@ format-check: ## 🎯  Format + lint, check only (no writes)
 
 # ----- Database (Drizzle ORM) -------------------------------------------------
 
+helm-test: ## 🎯  Validate Helm charts (lint + template smoke test)
+	@printf "🎯  Validating Helm charts...\n"
+	pwsh -File .tests/helm-charts.test.ps1
+	@printf "✅  Helm charts valid.\n"
+
 db-generate: ## 🧱  Generate a Drizzle migration from schema changes
 	@printf "🧱  Generating Drizzle migration from schema changes...\n"
 	DATABASE_URL=$${DATABASE_URL:-postgresql://placeholder:5432/placeholder} \

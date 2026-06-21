@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "trendscout.fullname" . }}-ollama-model-pull
+  labels:
+    app.kubernetes.io/component: ollama
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "1"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: {{ include "trendscout.fullname" . }}-ollama
+      containers:
+        - name: model-pull
+          image: {{ .Values.image }}
+          command:
+            - sh
+            - -c
+            - |
+              echo "=== Pulling primary model: {{ .Values.modelPool.primary }} ==="
+              ollama pull {{ .Values.modelPool.primary }}
+              echo "=== Pulling fallback model: {{ .Values.modelPool.fallback }} ==="
+              ollama pull {{ .Values.modelPool.fallback }}
+              echo "=== Model pull complete ==="
+          volumeMounts:
+            - name: models
+              mountPath: /root/.ollama
+          resources:
+            requests:
+              memory: 2Gi
+              cpu: "1"
+            limits:
+              memory: 4Gi
+              cpu: "2"

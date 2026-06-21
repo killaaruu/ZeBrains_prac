@@ -1,0 +1,16 @@
+apiVersion: v2
+name: trendscout
+description: TrendScout umbrella chart — bundles API, worker, Redis, Postgres, and Ollama
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: redis
+    version: "0.1.0"
+    repository: "file://charts/redis"
+  - name: postgres
+    version: "0.1.0"
+    repository: "file://charts/postgres"
+  - name: ollama
+    version: "0.1.0"
+    repository: "file://charts/ollama"
