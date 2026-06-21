@@ -1,0 +1,17 @@
+# PostgreSQL subchart values
+image: postgres:16-alpine
+port: 5432
+database: app_local
+user: app
+password: changeme
+persistence:
+  size: 8Gi
+service:
+  type: ClusterIP
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 250m
+  limits:
+    memory: 512Mi
+    cpu: "1"

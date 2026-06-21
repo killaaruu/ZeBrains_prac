@@ -1,0 +1,12 @@
+dependencies:
+- name: redis
+  repository: file://charts/redis
+  version: 0.1.0
+- name: postgres
+  repository: file://charts/postgres
+  version: 0.1.0
+- name: ollama
+  repository: file://charts/ollama
+  version: 0.1.0
+digest: sha256:d7b145d7082979ae6bb363dd5749f7175c6ea85e4d4c99e70050de40216ca830
+generated: "2026-06-21T22:01:09.0485593+03:00"

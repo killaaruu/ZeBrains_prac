@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "trendscout.fullname" . }}-ollama
+  labels:
+    app.kubernetes.io/component: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: ollama
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: ollama
+    spec:
+      {{- if .Values.gpu.enabled }}
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      {{- end }}
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: {{ include "trendscout.fullname" . }}-ollama
+      containers:
+        - name: ollama
+          image: {{ .Values.image }}
+          ports:
+            - containerPort: {{ .Values.port }}
+              name: ollama
+              protocol: TCP
+          env:
+            - name: OLLAMA_HOST
+              value: "0.0.0.0"
+            - name: OLLAMA_KEEP_ALIVE
+              value: "5m"
+          volumeMounts:
+            - name: models
+              mountPath: /root/.ollama
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: ollama
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: ollama
+            initialDelaySeconds: 10
+            periodSeconds: 5
