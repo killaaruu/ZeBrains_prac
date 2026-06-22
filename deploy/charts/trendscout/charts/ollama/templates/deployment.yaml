@@ -38,7 +38,16 @@ spec:
             - name: models
               mountPath: /root/.ollama
           resources:
+            {{- if .Values.gpu.enabled }}
             {{- toYaml .Values.resources | nindent 12 }}
+            {{- else }}
+            requests:
+              memory: 2Gi
+              cpu: "1"
+            limits:
+              memory: 4Gi
+              cpu: "2"
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /

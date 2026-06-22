@@ -87,7 +87,8 @@ helm upgrade --install trendscout $UmbrellaChart `
     --set api.image.pullPolicy=Never `
     --set worker.image.repository=$repo `
     --set worker.image.tag=$ImageTag `
-    --set worker.image.pullPolicy=Never
+    --set worker.image.pullPolicy=Never `
+    --set ollama.gpu.enabled=false
 
 # -- Step 7: Wait for deployments -------------------------------------------
 Write-Output "=== Step 7: Wait for deployments ==="

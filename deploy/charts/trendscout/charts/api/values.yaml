@@ -106,10 +106,24 @@ migration:
   # backfills and non-CONCURRENT index builds do NOT belong in this hook.
   activeDeadlineSeconds: 480
   # Standalone migration runner baked into the image (apps/api/Dockerfile copies
-  # dist/migrate.js explicitly).
+  # dist/migrate.js explicitly). Wrapped with a wait-for-postgres script so the
+  # job survives the race with the Postgres StatefulSet startup.
   command:
-    - node
-    - /app/dist/migrate.js
+    - sh
+    - -c
+    - |
+      set -e
+      echo "Waiting for PostgreSQL..."
+      node -e "
+        const n=require('net');
+        const u=new URL(process.env.DATABASE_URL);
+        let t=0;
+        (function p(){t++>30&&(console.error('timeout'),process.exit(1));
+        const s=n.connect(u.port,u.hostname,()=>{s.end();console.log('PostgreSQL ready')});
+        s.on('error',()=>{setTimeout(p,2000)})})()
+      "
+      echo "Running migrations..."
+      node /app/dist/migrate.js
   resources:
     requests:
       memory: 128Mi
