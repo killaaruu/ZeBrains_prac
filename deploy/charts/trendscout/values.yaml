@@ -92,4 +92,3 @@ ollama:
     limits:
       memory: 16Gi
       cpu: "4"
-      nvidia.com/gpu: 1
