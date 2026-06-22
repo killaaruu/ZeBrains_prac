@@ -32,6 +32,45 @@ postgres:
       memory: 512Mi
       cpu: "1"
 
+api:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/your-org/api
+    tag: latest
+    pullPolicy: Always
+  secretName: api-secrets
+  env:
+    PORT: "3000"
+    MIGRATIONS_DIR: /app/migrations
+  ingress:
+    enabled: false
+  migration:
+    enabled: true
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: "1"
+
+worker:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/your-org/api
+    tag: latest
+    pullPolicy: Always
+  secretName: api-secrets
+  env:
+    PORT: "3000"
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
+      cpu: "1"
+
 ollama:
   image: ollama/ollama:latest
   port: 11434
@@ -53,4 +92,3 @@ ollama:
     limits:
       memory: 16Gi
       cpu: "4"
-      nvidia.com/gpu: 1

@@ -108,3 +108,34 @@ Default local startup is `make local` (worktree-safe: Postgres + Redis via `dock
 Deployment is GitOps + ArgoCD (see `.github/workflows/deploy-{staging,prod}.yml` and the Helm chart in `deploy/charts/api/`). Only the API is containerized; the web app deploys to Vercel (optional). Registry, cluster, namespace, gitops repo, and ArgoCD app names are supplied via GitHub repo **variables/secrets** — there are no hard-coded infra names in this template.
 
 Adding or changing an env var is NOT just `.env` / `.env.example` — the value must also be wired into your deployment (Helm values / gitops secret) and verified on the running pod after the deploy syncs. Use the `deploy-env-var` skill for the decision algorithm.
+
+## k3s clean-restart playbook (WSL2 local)
+
+When k3s containerd is stale (pods stuck at `ContainerCreating`), or DB must be reset:
+
+```bash
+# Inside WSL2 Ubuntu-24.04 as root
+# 1. Kill k3s
+kill 14 2>/dev/null
+sleep 3
+
+# 2. Wipe DB + stale kubelet state
+rm -rf /var/lib/rancher/k3s/server/db
+rm -f /var/log/k3s.log
+
+# 3. Start fresh
+setsid /usr/local/bin/k3s server --write-kubeconfig-mode 644 > /var/log/k3s.log 2>&1 &
+
+# 4. Wait for node (30-60s)
+k3s kubectl wait --for=condition=Ready nodes --all --timeout=60s
+k3s kubectl get nodes
+
+# 5. From Windows PowerShell (repo root):
+#    Build image, load into containerd, deploy
+.\deploy\scripts\k3s-up.ps1
+```
+
+Troubleshooting:
+- If k3s panics on CSI init after DB wipe (`error updating CSINode annotation`), wait for node registration (the panic auto-recovers on restart).
+- If `k3s kubectl` gives `Unauthorized`, k3s regenerated its CA — re-copy the kubeconfig: `cat /etc/rancher/k3s/k3s.yaml` → update `server:` IP.
+- If Windows kubectl/helm get `connection refused` to 172.x.x.x:6443, routing is flaky — run `k3s kubectl` directly inside WSL.

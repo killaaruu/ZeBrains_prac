@@ -14,7 +14,7 @@ COPY packages/shared/package.json       packages/shared/package.json
 COPY packages/db-backend/package.json   packages/db-backend/package.json
 COPY packages/config/package.json       packages/config/package.json
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm config set fetch-retries 5 fetch-retry-mintimeout 20000 network-concurrency 4 && pnpm install --frozen-lockfile
 
 # ── Stage 2: Build ───────────────────────────────────────────────────
 FROM deps AS build
@@ -40,6 +40,8 @@ WORKDIR /app
 
 COPY --from=build /app/deployed/node_modules ./node_modules
 COPY --from=build /repo/apps/api/dist/main.js ./dist/main.js
+# Worker entrypoint: `docker run <image> node dist/worker.js`
+COPY --from=build /repo/apps/api/dist/worker.js ./dist/worker.js
 # Standalone migration runner: `docker run <image> node dist/migrate.js`
 COPY --from=build /repo/apps/api/dist/migrate.js ./dist/migrate.js
 # Migrations applied automatically by bootstrap() on startup (see ADR-002)

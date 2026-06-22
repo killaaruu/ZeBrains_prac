@@ -50,3 +50,10 @@ coverage/
 *.log
 *.timestamp-*.mjs
 .playwright-mcp/
+
+# Local dev artifacts
+.pnpm-store/
+.tmp/
+.worktrees/
+_qry.cjs
+.test-requests.*

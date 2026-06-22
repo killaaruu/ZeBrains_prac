@@ -1,0 +1,134 @@
+# Default values for the api Helm chart.
+#
+# This file holds env-AGNOSTIC defaults only. Environment-specific values
+# (image repository/registry, ingress hostname, NODE_ENV, scheduling) live in
+# your gitops repo: clusters/<cluster>/values/api/values-{prod,staging}.yaml
+# and are required for a real deployment.
+#
+# Rendering with this file alone produces a working but ingress-less Deployment
+# usable for local `helm template` review.
+
+replicaCount: 1
+
+image:
+  # Override per environment in your gitops values file.
+  repository: ghcr.io/your-org/api
+  tag: latest
+  pullPolicy: Always
+
+# Image pull secret for a private registry (omit for public registries).
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 3000
+
+# Ingress disabled by default — env values must enable + supply hostname/TLS.
+ingress:
+  enabled: false
+
+# Default env: only the values that are identical across environments.
+# NODE_ENV is env-specific and lives in env-specific values files.
+env:
+  PORT: "3000"
+  MIGRATIONS_DIR: /app/migrations
+
+# Reference to a K8s Secret for sensitive env vars (DATABASE_URL, REDIS_URL,
+# SUPABASE_*, …). Same name across environments — different namespaces/content.
+secretName: api-secrets
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 250m
+  limits:
+    memory: 512Mi
+    cpu: "1"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# startupProbe gives NestJS time to boot (migrations, DI init) before
+# liveness/readiness probes kick in. Up to 30 * 5s = 150s to start.
+startupProbe:
+  httpGet:
+    path: /health
+    port: http
+  periodSeconds: 5
+  failureThreshold: 30
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  periodSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  periodSeconds: 5
+  failureThreshold: 3
+
+podDisruptionBudget:
+  enabled: false
+
+topologySpreadConstraints: []
+
+# Empty by default — pods schedule on any worker. Env values can constrain.
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Drizzle migrations as an ArgoCD PreSync hook Job. When enabled, ArgoCD runs
+# this Job before applying the new Deployment; failure halts the sync, so old
+# pods keep serving traffic. The API container also runs migrations on startup
+# (idempotent), so this is an extra pre-flight safety net rather than a
+# replacement.
+migration:
+  enabled: true
+  # Fail the migration Job (and the ArgoCD PreSync hook) after this many seconds
+  # rather than hanging indefinitely. Keep below the CI `argocd app wait
+  # --timeout` so a stuck migration surfaces as a concrete DeadlineExceeded.
+  #
+  # CONVENTION: blocking PreSync migrations must stay fast (seconds). Long data
+  # backfills and non-CONCURRENT index builds do NOT belong in this hook.
+  activeDeadlineSeconds: 480
+  # Standalone migration runner baked into the image (apps/api/Dockerfile copies
+  # dist/migrate.js explicitly). Wrapped with a PostgreSQL real-query wait loop
+  # so the job survives both TCP and PG-protocol startup races.
+  command:
+    - sh
+    - -c
+    - |
+      set -e
+      echo "Waiting for PostgreSQL (query check)..."
+      node -e "
+        const postgres=require('postgres');
+        const u=new URL(process.env.DATABASE_URL);
+        let t=0;
+        (function p(){t++>30&&(console.error('timeout'),process.exit(1));
+        const sql=postgres(process.env.DATABASE_URL,{max:1,idle_timeout:5,connect_timeout:5});
+        sql\`SELECT 1\`.then(()=>{sql.end();console.log('PostgreSQL ready');process.exit(0)})
+        .catch(()=>{sql.end();setTimeout(p,2000)})})()
+      "
+      echo "Running migrations..."
+      node /app/dist/migrate.js
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 500m

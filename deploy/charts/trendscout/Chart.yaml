@@ -14,3 +14,9 @@ dependencies:
   - name: ollama
     version: "0.1.0"
     repository: "file://charts/ollama"
+  - name: api
+    version: "0.1.0"
+    repository: "file://charts/api"
+  - name: worker
+    version: "0.1.0"
+    repository: "file://charts/worker"
