@@ -14,7 +14,7 @@ COPY packages/shared/package.json       packages/shared/package.json
 COPY packages/db-backend/package.json   packages/db-backend/package.json
 COPY packages/config/package.json       packages/config/package.json
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm config set fetch-retries 5 fetch-retry-mintimeout 20000 network-concurrency 4 && pnpm install --frozen-lockfile
 
 # ── Stage 2: Build ───────────────────────────────────────────────────
 FROM deps AS build

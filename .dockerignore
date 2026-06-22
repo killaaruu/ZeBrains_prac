@@ -1,7 +1,8 @@
-node_modules
+**/node_modules
 .git
 .turbo
 .env*
+.worktrees
 
 # Packages not needed for API build at runtime, but their package.json must be
 # visible to pnpm so `pnpm install --frozen-lockfile` can resolve the workspace.
