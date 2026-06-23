@@ -43,7 +43,17 @@ export async function bootstrap() {
   process.once("SIGTERM", () => void shutdown("SIGTERM"));
   process.once("SIGINT", () => void shutdown("SIGINT"));
 
-  app.enableCors();
+  app.enableCors({
+    origin: [
+      "https://trendscout-stage.vercel.app",
+      "https://trendscout-stage-*.vercel.app",
+      "http://localhost:5173",
+      "http://localhost:3000",
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+  });
 
   const metricsService = app.get(MetricsService);
   app.useGlobalInterceptors(new LoggingInterceptor(metricsService));
