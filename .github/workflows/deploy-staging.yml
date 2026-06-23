@@ -141,5 +141,6 @@ jobs:
           cp -r dist/* ../../.vercel/output/static/
           echo '{"version": 3, "routes": [{ "src": "/(.*)", "dest": "/index.html" }]}' > ../../.vercel/output/routes-manifest.json
           echo '{"version": 1, "buildId": "staging", "pages": {"/": {}}, "dynamicRoutes": []}' > ../../.vercel/output/prerender-manifest.json
+          echo '{"version": 3, "routes": [{ "src": "/(.*)", "dest": "/index.html" }], "framework": "vite"}' > ../../.vercel/output/config.json
       - name: Deploy
         run: npx vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
