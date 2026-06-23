@@ -128,22 +128,14 @@ jobs:
         run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build with env vars
+      - name: Build and deploy to Vercel
         env:
           VITE_API_URL: https://round-anaheim-thee-tournaments.trycloudflare.com
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
-          cd apps/web
-          pnpm run build
-          mkdir -p ../../.vercel/output/static
-          cp -r dist/* ../../.vercel/output/static/
-          # Ensure index.html is at root for SPA fallback
-          cp dist/index.html ../../.vercel/output/index.html
-          # Create proper Vercel output structure
-          echo '{"version": 3, "routes": [{ "handle": "filesystem" }, { "src": "/(.*)", "dest": "/index.html" }], "framework": "vite"}' > ../../.vercel/output/config.json
-          echo '{"version": 1, "buildId": "staging", "pages": {"/": {}}, "dynamicRoutes": []}' > ../../.vercel/output/prerender-manifest.json
-          echo '{"version": 1, "routes": [{ "src": "/(.*)", "dest": "/index.html" }]}' > ../../.vercel/output/routes-manifest.json
-      - name: Deploy
+          # Build with vercel which handles all the output structure
+          npx vercel build --prod --token="$VERCEL_TOKEN" --scope=k1llaaruu
+      - name: Deploy to Vercel
         run: npx vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
