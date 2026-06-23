@@ -129,11 +129,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build with env vars
+        env:
+          VITE_API_URL: https://round-anaheim-thee-tournaments.trycloudflare.com
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
-          if [ -f .vercel/.env.production.local ]; then
-            export $(cat .vercel/.env.production.local | grep -v '^#' | xargs)
-          fi
-          export VITE_API_URL=https://round-anaheim-thee-tournaments.trycloudflare.com
-          npx vercel build --prod --token="$VERCEL_TOKEN"
+          cd apps/web
+          pnpm run build
+          mkdir -p ../../.vercel/output/static
+          cp -r dist/* ../../.vercel/output/static/
+          echo '{"version": 3, "routes": [{ "src": "/(.*)", "dest": "/index.html" }]}' > ../../.vercel/output/routes-manifest.json
+          echo '{"version": 1, "buildId": "staging", "pages": {"/": {}}, "dynamicRoutes": []}' > ../../.vercel/output/prerender-manifest.json
       - name: Deploy
         run: npx vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
