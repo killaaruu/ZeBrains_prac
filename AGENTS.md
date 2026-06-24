@@ -111,7 +111,7 @@ k3s via Helm.
 Full guide: `docs/deployment.md`. The model in 3 lines:
 1. The **API + report worker run locally on a GPU host** (they need local Ollama).
 2. They are exposed through a **stable ngrok reserved domain**
-   (`https://electable-suitable-hungry.ngrok-free.dev` → `localhost:3111`).
+   (`https://your-app.ngrok-free.dev` → `localhost:3111`).
 3. The **web frontend is on Vercel** (`trendscout-stage`,
    `https://trendscout-stage.vercel.app`) and reaches the API via that domain.
 

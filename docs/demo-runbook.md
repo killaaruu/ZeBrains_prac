@@ -13,7 +13,7 @@ Short pre-demo checklist for showing the customer. Full detail: `docs/deployment
    (Postgres + Redis + migrations + API + worker + ngrok.)
 3. **Confirm the tunnel** — hit the public URL `make demo` prints:
    ```bash
-   curl https://electable-suitable-hungry.ngrok-free.dev/health
+   curl https://your-app.ngrok-free.dev/health
    ```
    It must return JSON (not ngrok interstitial HTML).
 4. **Run the live flow:**
@@ -33,10 +33,10 @@ during the demo to show what's under the hood:
 
 | Show | URL |
 |---|---|
-| **Swagger / OpenAPI** — every API endpoint | `https://electable-suitable-hungry.ngrok-free.dev/api/docs` |
-| **Bull Board** — the BullMQ report-generation queue (job status, retries) | `https://electable-suitable-hungry.ngrok-free.dev/queues` |
-| **Health check** | `https://electable-suitable-hungry.ngrok-free.dev/health` |
-| **Metrics** — process memory / uptime | `https://electable-suitable-hungry.ngrok-free.dev/health/metrics` |
+| **Swagger / OpenAPI** — every API endpoint | `https://your-app.ngrok-free.dev/api/docs` |
+| **Bull Board** — the BullMQ report-generation queue (job status, retries) | `https://your-app.ngrok-free.dev/queues` |
+| **Health check** | `https://your-app.ngrok-free.dev/health` |
+| **Metrics** — process memory / uptime | `https://your-app.ngrok-free.dev/health/metrics` |
 
 Good moment to open **Bull Board** (`/queues`) while a report is still
 `thinking` — the customer sees the job being processed live. The report itself
