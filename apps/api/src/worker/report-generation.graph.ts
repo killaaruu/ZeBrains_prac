@@ -9,10 +9,13 @@ import {
   reportMarketItemsOrNotFoundSchema,
   reportResultSchema,
   reportRuMarketSchema,
-  reportSustainabilitySchema,
   ruMarketNotFound,
 } from "@repo/shared";
 import { z } from "zod";
+import {
+  type SustainabilityScorerInput,
+  scoreSustainability,
+} from "../report-generation/sustainability-scorer";
 import { OllamaProvider } from "./ollama.provider";
 import { TavilyResearchService, type TavilySourceCandidate } from "./tavily-research.service";
 
@@ -131,19 +134,17 @@ export class ReportGenerationGraph {
         ),
       )
       .addNode("sustainability-scorer", (state: GraphState) =>
-        this.runNode(
-          "sustainability-scorer",
-          input,
-          nodeTimingsMs,
-          () => this.scoreSustainability(state),
-          () => ({
-            sustainability: {
-              score: 5,
-              arguments_for: ["Недостаточно проверенных данных для уверенной оценки."],
-              arguments_against: ["Полный анализ не удалось завершить на доступных источниках."],
-            },
-          }),
-        ),
+        this.runNode("sustainability-scorer", input, nodeTimingsMs, () => {
+          const ruMarket = state.analysis.ru_market;
+          const isRuNotFound = ruMarket === ruMarketNotFound || ruMarket === marketNotFound;
+          const scorerInput: SustainabilityScorerInput = {
+            globalMarket: Array.isArray(state.analysis.global_market)
+              ? state.analysis.global_market
+              : [],
+            ruMarket: Array.isArray(ruMarket) ? ruMarket : isRuNotFound ? ruMarketNotFound : [],
+          };
+          return { sustainability: scoreSustainability(scorerInput) };
+        }),
       )
       .addNode("assembler", (state: GraphState) =>
         this.runNode(
@@ -303,29 +304,6 @@ export class ReportGenerationGraph {
               : marketNotFound,
       },
     };
-  }
-
-  /**
-   * Sustainability-Scorer produces the 1..10 score plus arguments so the assembler
-   * can merge a fully contract-valid report from already-structured upstream state.
-   */
-  private async scoreSustainability(
-    state: GraphState,
-  ): Promise<Pick<GraphState, "sustainability">> {
-    const sustainability = await this.ollamaProvider.generate(
-      [
-        "Sustainability-Scorer",
-        "Assess the trend's sustainability from 1 to 10.",
-        "Return JSON with score, arguments_for, and arguments_against.",
-        "Write every argument in the same language as the user topic (Russian topic → Russian text).",
-        state.guardedTopic,
-        `Analysis: ${JSON.stringify(state.analysis)}`,
-      ].join("\n"),
-      reportSustainabilitySchema,
-      { timeoutMs: this.nodeTimeoutMs("sustainability-scorer") },
-    );
-
-    return { sustainability };
   }
 
   /**

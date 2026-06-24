@@ -15,9 +15,14 @@ const generatedReport: ReportResult = {
   ],
   ru_market: ruMarketNotFound,
   sustainability: {
-    score: 7,
-    arguments_for: ["Strong enterprise demand"],
-    arguments_against: ["Quality depends on source material"],
+    score: 1,
+    arguments_for: ["Validated findings still show concrete adoption for GitHub."],
+    arguments_against: [
+      "Validated findings did not surface Russian implementations, which weakens evidence for local market durability.",
+      "The current evidence is concentrated in a single company (GitHub), so vendor-specific conditions may skew the outlook.",
+      "Part of the evidence remains qualitative rather than backed by consistent hard metrics across all validated findings.",
+      "Source coverage is still relatively thin compared with the number of findings, so the signal may be early.",
+    ],
   },
 };
 
@@ -35,9 +40,25 @@ const generatedAnalysis = {
 };
 
 const generatedSustainability = {
-  score: 7,
-  arguments_for: ["Strong enterprise demand"],
-  arguments_against: ["Quality depends on source material"],
+  score: 1,
+  arguments_for: ["Validated findings still show concrete adoption for GitHub."],
+  arguments_against: [
+    "Validated findings did not surface Russian implementations, which weakens evidence for local market durability.",
+    "The current evidence is concentrated in a single company (GitHub), so vendor-specific conditions may skew the outlook.",
+    "Part of the evidence remains qualitative rather than backed by consistent hard metrics across all validated findings.",
+    "Source coverage is still relatively thin compared with the number of findings, so the signal may be early.",
+  ],
+};
+
+const generatedSustainabilityTesla = {
+  score: 1,
+  arguments_for: ["Validated findings still show concrete adoption for Tesla."],
+  arguments_against: [
+    "Validated findings did not surface Russian implementations, which weakens evidence for local market durability.",
+    "The current evidence is concentrated in a single company (Tesla), so vendor-specific conditions may skew the outlook.",
+    "Part of the evidence remains qualitative rather than backed by consistent hard metrics across all validated findings.",
+    "Source coverage is still relatively thin compared with the number of findings, so the signal may be early.",
+  ],
 };
 
 describe("ReportGenerationGraph", () => {
@@ -136,7 +157,7 @@ describe("ReportGenerationGraph", () => {
       }),
     ).resolves.toEqual(generatedReport);
 
-    expect(provider.generate).toHaveBeenCalledTimes(2);
+    expect(provider.generate).toHaveBeenCalledTimes(1);
     expect(tavilyResearchService.search).toHaveBeenCalledWith([
       "AI coding assistants",
       "AI coding assistants companies products market",
@@ -152,12 +173,6 @@ describe("ReportGenerationGraph", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://example.com/copilot",
       expect.objectContaining({ method: "HEAD", signal: expect.any(AbortSignal) }),
-    );
-    expect(provider.generate).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining("global_market"),
-      expect.anything(),
-      expect.objectContaining({ timeoutMs: 15_000 }),
     );
     expect(loggerSpy).toHaveBeenCalledWith(
       expect.stringContaining('"event":"report_generation_node_completed"'),
@@ -655,7 +670,7 @@ describe("ReportGenerationGraph", () => {
         },
       ],
       ru_market: ruMarketNotFound,
-      sustainability: generatedSustainability,
+      sustainability: generatedSustainabilityTesla,
     });
   });
 
@@ -801,9 +816,8 @@ describe("ReportGenerationGraph", () => {
       generate: vi
         .fn()
         .mockResolvedValueOnce({ queries: ["электромобили рынок"] }) // planner
-        .mockRejectedValueOnce(new Error("analyst model non-conformance")) // analyst FAILS
-        .mockResolvedValueOnce({ score: 5, arguments_for: ["a"], arguments_against: ["b"] }), // scorer
-      // assembler is deterministic now, so the scorer is the final model call
+        .mockRejectedValueOnce(new Error("analyst model non-conformance")), // analyst FAILS
+      // scorer and assembler are now deterministic, no model calls
     };
     const tavilyResearchService = { search: vi.fn().mockResolvedValue([]) };
     const graph = new ReportGenerationGraph(provider as never, tavilyResearchService as never);
@@ -819,6 +833,6 @@ describe("ReportGenerationGraph", () => {
 
     // Pipeline continued past the failed node; the assembler saw the degraded
     // analysis (markets fell back to "Не найдено").
-    expect(provider.generate).toHaveBeenCalledTimes(2);
+    expect(provider.generate).toHaveBeenCalledTimes(1);
   });
 });
