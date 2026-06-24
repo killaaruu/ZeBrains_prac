@@ -1,15 +1,16 @@
-# Generic GitOps + ArgoCD deploy pipeline (staging).
+# Staging deploy — web app to Vercel.
 #
-# Configure these GitHub repo *variables* (Settings → Secrets and variables → Actions → Variables):
-#   CONTAINER_REGISTRY        e.g. ghcr.io/your-org   (image pushed as <registry>/api:<sha>)
-#   GITOPS_REPO               e.g. your-org/gitops-infra
-#   GITOPS_VALUES_PATH_STAGING e.g. clusters/<cluster>/values/api/values-staging.yaml
-#   ARGOCD_APP_STAGING        e.g. api-staging
-#   CI_GIT_USER / CI_GIT_EMAIL  commit identity for the gitops bump
-# And these *secrets*:
-#   REGISTRY_USERNAME / REGISTRY_PASSWORD   container registry login
-#   GITOPS_TOKEN              PAT with write access to the gitops repo
-#   ARGOCD_SERVER / ARGOCD_TOKEN
+# The API is NOT containerized/clustered for this product: it runs locally on a
+# GPU machine (Ollama) and is exposed to the Vercel frontend through a stable
+# ngrok domain. So this workflow only ships the web app. The API "deploy" is
+# `make demo` on the host machine (see docs/deployment.md).
+#
+# All VITE_* values (including VITE_API_URL = the ngrok domain) live in the
+# Vercel project's Environment Variables and are pulled at build time — there is
+# no API URL hardcoded here, so a new build never needs a code change.
+#
+# Required GitHub secrets: VERCEL_TOKEN, VERCEL_ORG_ID.
+# Required GitHub variable: VERCEL_WEB_PROJECT_ID (deploy is skipped if empty).
 name: Deploy staging
 
 on:
@@ -23,99 +24,15 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  IMAGE: ${{ vars.CONTAINER_REGISTRY }}/api
-
 jobs:
-  build-api:
-    name: Build & push API image
-    runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.tag.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - id: tag
-        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-
-      - name: Login to container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ vars.CONTAINER_REGISTRY }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Build & push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/api/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
-          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-staging
-          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache-staging,mode=max
-
-  deploy-api:
-    name: Deploy API via ArgoCD
-    runs-on: ubuntu-latest
-    needs: build-api
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Checkout gitops repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ vars.GITOPS_REPO }}
-          token: ${{ secrets.GITOPS_TOKEN }}
-          path: gitops
-
-      - name: Install yq
-        run: |
-          sudo wget -qO /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-
-      - name: Bump image tag in gitops
-        env:
-          NEW_TAG: ${{ needs.build-api.outputs.image_tag }}
-          VALUES_PATH: ${{ vars.GITOPS_VALUES_PATH_STAGING }}
-        working-directory: gitops
-        run: |
-          set -euo pipefail
-          export TAG="$NEW_TAG"
-          yq -i '.image.tag = strenv(TAG)' "$VALUES_PATH"
-          if git diff --quiet; then
-            echo "No changes to $VALUES_PATH (already at $NEW_TAG)"
-          else
-            git config user.name "${{ vars.CI_GIT_USER }}"
-            git config user.email "${{ vars.CI_GIT_EMAIL }}"
-            git add "$VALUES_PATH"
-            git commit -m "chore(staging): bump api to $NEW_TAG"
-            git push
-          fi
-
-      - name: Wait for ArgoCD sync & health
-        uses: ./.github/actions/argocd-wait
-        with:
-          app-name: ${{ vars.ARGOCD_APP_STAGING }}
-          argocd-server: ${{ secrets.ARGOCD_SERVER }}
-          argocd-token: ${{ secrets.ARGOCD_TOKEN }}
-
-  # Optional: deploy the web app to Vercel. Remove this job if you host the
-  # frontend elsewhere. Requires secrets VERCEL_TOKEN, VERCEL_ORG_ID and
-  # variable VERCEL_WEB_PROJECT_ID.
   vercel-web:
     name: Vercel — web (staging)
     runs-on: ubuntu-latest
     if: ${{ vars.VERCEL_WEB_PROJECT_ID != '' }}
     timeout-minutes: 10
     env:
-      VERCEL_PROJECT_ID: ${{ vars.VERCEL_WEB_PROJECT_ID }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_WEB_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -124,18 +41,22 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      # Pulls the linked project + its Environment Variables (VITE_*) from Vercel.
       - name: Pull Vercel project
         run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Build and deploy to Vercel
-        env:
-          VITE_API_URL: https://estimation-interference-postings-sender.trycloudflare.com
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # Fail loudly instead of shipping a green build whose bundle has empty
+      # VITE_* values (Supabase/API would silently break at runtime).
+      - name: Verify required env vars are present
         run: |
-          # Build with vercel which handles all the output structure
-          npx vercel build --prod --token="$VERCEL_TOKEN" --scope=k1llaaruu
-      - name: Deploy to Vercel
+          f=.vercel/.env.production.local
+          for v in VITE_API_URL VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY; do
+            val=$(grep "^$v=" "$f" 2>/dev/null | cut -d= -f2- | tr -d '"')
+            if [ -z "$val" ]; then
+              echo "::error::$v is missing or empty in the Vercel project env — set it in Vercel before deploying."
+              exit 1
+            fi
+          done
+      - name: Build with Vercel
+        run: npx vercel build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy prebuilt output
         run: npx vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"

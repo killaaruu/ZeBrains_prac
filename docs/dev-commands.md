@@ -20,6 +20,10 @@ make check
 make local
 make local-e2e
 
+# Customer demo (local API + worker behind the stable ngrok domain)
+make demo        # bring up the customer demo (Postgres + Redis + migrations + API + worker + ngrok)
+make demo-stop   # tear down the customer demo
+
 # Individual commands
 make typecheck
 make test

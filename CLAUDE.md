@@ -105,9 +105,11 @@ Default local startup is `make local` (worktree-safe: Postgres + Redis via `dock
 
 ## Ops / Deploy
 
-Deployment is GitOps + ArgoCD (see `.github/workflows/deploy-{staging,prod}.yml` and the Helm chart in `deploy/charts/api/`). Only the API is containerized; the web app deploys to Vercel (optional). Registry, cluster, namespace, gitops repo, and ArgoCD app names are supplied via GitHub repo **variables/secrets** — there are no hard-coded infra names in this template.
+The live demo path is **Vercel + ngrok + `make demo`** (full guide: `docs/deployment.md`). The API + report worker run **locally on a GPU host** (they need local Ollama), behind a **stable ngrok reserved domain** → port 3111; the web app (Vite) is on Vercel (`trendscout-stage`) and reaches the API via the project env var `VITE_API_URL` (set once to the stable domain — no redeploy churn). Bring the API up with `make demo`, stop with `make demo-stop`; demo config/secrets live in `.demo.env` (copy from `.demo.env.example`). Deploy the web app by pushing to `staging` (`.github/workflows/deploy-{staging,prod}.yml`, web-only) or via the Vercel CLI. Don't hardcode tunnel URLs in workflows, and don't resurrect the dead trycloudflare/cors-patch hacks (CORS lives in `apps/api/src/bootstrap.ts`).
 
-Adding or changing an env var is NOT just `.env` / `.env.example` — the value must also be wired into your deployment (Helm values / gitops secret) and verified on the running pod after the deploy syncs. Use the `deploy-env-var` skill for the decision algorithm.
+The GitOps + ArgoCD + Helm path (`deploy/charts/api/`) remains as the **future real-cluster option** and is **not currently wired** (no cluster/registry/gitops configured) — don't re-add the Docker→registry→ArgoCD deploy jobs unless that infra exists. When used, registry, cluster, namespace, gitops repo, and ArgoCD app names come from GitHub repo **variables/secrets** — no hard-coded infra names.
+
+Adding or changing an env var is NOT just `.env` / `.env.example` — for the demo it must also be in `.demo.env` (+ the Vercel project for `VITE_*` vars); for the cluster path it must be wired into the Helm values / gitops secret and verified on the running pod after the sync. Use the `deploy-env-var` skill for the decision algorithm.
 
 ## k3s clean-restart playbook (WSL2 local)
 

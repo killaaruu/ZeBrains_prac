@@ -67,6 +67,22 @@ make check          # format + typecheck + test + build (the full gate)
 
 Copy the `.env.example` files to `.env` in each app/package and fill in real values for non-local deployments.
 
+## Building
+
+All builds go through Turborepo via the `Makefile`:
+
+```bash
+make build                 # build every package + app (respects the dep graph)
+make build PKG=@repo/api    # build a single workspace
+make check                 # full gate: format + typecheck + test + build
+```
+
+Per-target builds:
+
+- **API image (Docker):** `docker build -f apps/api/Dockerfile -t api:local .`
+- **Web app:** built by Vercel — automatically on push to `staging`, or locally with `npx vercel build --prod` (see [`docs/deployment.md`](docs/deployment.md)).
+- **Demo runtime:** `make demo` compiles the API (`nest build`) and starts it with the worker behind the ngrok tunnel.
+
 ## Database Workflow
 
 Schema lives in `packages/db-backend/src/schema/` (one file per table, re-exported from `index.ts`).
@@ -100,7 +116,24 @@ Notable suites kept by the template:
 
 ## Deployment
 
-The API is containerized (`apps/api/Dockerfile`, multi-stage) and deployed to Kubernetes via Helm. The web app deploys to Vercel (optional). CI runs `pnpm turbo check` on every push/PR (`.github/workflows/ci.yml`).
+The live TrendScout demo does **not** run the API in a cluster. The API + report
+worker run **locally on a GPU host** (they need a local Ollama for LLM inference)
+and are exposed to the Vercel frontend through a **stable ngrok domain**. The web
+app (Vite) is on Vercel and reaches the API via the project env var `VITE_API_URL`
+— set once to the stable ngrok domain, so there's no redeploy churn.
+
+```bash
+make demo        # GPU host: Postgres + Redis + migrations + API + worker + ngrok
+make demo-stop   # tear it down
+```
+
+Push to `staging` (or run the Vercel CLI manually) to deploy the web app. Full
+guide — prerequisites, one-time setup, deploy paths, and troubleshooting — in
+[`docs/deployment.md`](docs/deployment.md); pre-demo checklist in
+[`docs/demo-runbook.md`](docs/demo-runbook.md).
+
+The Helm chart + GitOps path below remains in the repo as the **future
+real-cluster option** and is not used for the current demo.
 
 Build locally:
 
@@ -139,10 +172,14 @@ The Helm chart (`deploy/charts/api/`) runs migrations as an ArgoCD PreSync hook 
 
 The layer-scaffolder skills (`new-drizzle-table`, `new-shared-schema`, `new-api-module`, `new-client-hook`, `new-frontend-feature`) automate steps 2–3.
 
+## License
+
+Released under the [MIT License](LICENSE).
+
 ## Customization Guide
 
 - **Branding:** `apps/web/index.html` (title), `apps/web/src/shared/assets/logo.tsx` (logo), `apps/web/src/globals.css` (`--brand` color tokens + theme), `sidebar-data.ts` (team name + nav).
 - **Auth:** Supabase by default (`apps/web/src/shared/lib/supabase.ts`, `apps/api/src/auth/`). The `local-dev-auth-service` bypass is for local only.
 - **Error reporting / tracing:** none wired by default. Add Sentry/Rollbar in `apps/api/src/common/filters/http-exception.filter.ts` and OpenTelemetry/Langfuse where you need it.
 - **Queues:** the `example` BullMQ queue + Bull Board dashboard (`/queues`) in `apps/api/src/queue/` is a working reference.
-- **Conventions:** `CLAUDE.md` (root + per-package) encodes the engineering rules; `AGENTS.md` is a symlink to it. Agent skills live in `.agents/skills` and `.claude/skills`.
+- **Conventions:** `CLAUDE.md` (root + per-package) encodes the engineering rules; `AGENTS.md` holds agent-facing instructions (including the deploy runbook). Agent skills live in `.agents/skills` and `.claude/skills`.

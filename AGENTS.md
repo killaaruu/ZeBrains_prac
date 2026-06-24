@@ -107,6 +107,33 @@ k3s via Helm.
 - `/verify` — run the full verification gate and report honestly.
 - `/brainstorm <topic>` — design-before-code flow; writes a spec, no code until approved.
 
+## Deployment (live demo) — read before touching deploy
+Full guide: `docs/deployment.md`. The model in 3 lines:
+1. The **API + report worker run locally on a GPU host** (they need local Ollama).
+2. They are exposed through a **stable ngrok reserved domain**
+   (`https://electable-suitable-hungry.ngrok-free.dev` → `localhost:3111`).
+3. The **web frontend is on Vercel** (`trendscout-stage`,
+   `https://trendscout-stage.vercel.app`) and reaches the API via that domain.
+
+- **Bring the API online:** `make demo` on the GPU host (Postgres+Redis, migrations,
+  API, worker, ngrok). Stop with `make demo-stop`. Config in `.demo.env`
+  (gitignored; copy from `.demo.env.example`).
+- **Redeploy the web app:** push to `staging`
+  (`.github/workflows/deploy-staging.yml`), or manually
+  `npx vercel pull/build/deploy` (see `docs/deployment.md`). Both read the API URL
+  from the Vercel project env var — never pass it in.
+- **`VITE_API_URL` lives on the Vercel project** and is the single source of truth
+  for the API URL. The ngrok domain is **stable**, so it is set once and never
+  changes — do **not** hardcode tunnel URLs in workflows again (that caused the old
+  "redeploy with new tunnel URL" churn).
+- **Do NOT** resurrect the dead `trycloudflare` tunnel or the `cors-patch.js` /
+  `patch-cors.sh` runtime CORS patching — CORS lives in `apps/api/src/bootstrap.ts`.
+- **Do NOT** re-add the `build-api` / `deploy-api` (Docker → registry → ArgoCD) jobs
+  to the deploy workflows unless a real cluster/registry/gitops is configured. The
+  Helm chart under `deploy/charts/` + ArgoCD remain as the future real-cluster path,
+  not used for this demo.
+- For API env-var changes use the **`deploy-env-var`** skill.
+
 ## Honesty
 Report outcomes faithfully. If tests fail, say so with the real output. Never
 claim "done" or "passing" without showing the green command output.

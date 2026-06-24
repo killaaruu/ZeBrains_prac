@@ -103,6 +103,42 @@ describe("ReportsService", () => {
     expect(fns.selectOrderBy).toHaveBeenCalledOnce();
   });
 
+  it("returns an empty list when the user has no reports", async () => {
+    const { db } = createDbMock([]);
+    const service = new ReportsService(db as never, queue as never);
+
+    await expect(service.list("11111111-1111-4111-8111-111111111111")).resolves.toEqual([]);
+  });
+
+  it("returns the mapped report when it is owned by the current user", async () => {
+    const { db, fns } = createDbMock([queuedRow]);
+    const service = new ReportsService(db as never, queue as never);
+
+    await expect(
+      service.getById(queuedRow.id, "11111111-1111-4111-8111-111111111111"),
+    ).resolves.toEqual(mapReportRow(queuedRow));
+
+    expect(fns.selectLimit).toHaveBeenCalledOnce();
+    const wherePredicate = (fns.selectWhere.mock.calls.at(0) as unknown[] | undefined)?.[0];
+    expect(collectColumnNames(wherePredicate)).toEqual(expect.arrayContaining(["id", "user_id"]));
+  });
+
+  it("throws not found when deleting a report not owned by the current user", async () => {
+    const execute = vi.fn().mockResolvedValue([]);
+    const returning = vi.fn(() => ({ execute }));
+    const where = vi.fn(() => ({ returning }));
+    const db = {
+      insert: vi.fn(),
+      select: vi.fn(),
+      delete: vi.fn(() => ({ where })),
+    };
+    const service = new ReportsService(db as never, queue as never);
+
+    await expect(
+      service.remove(queuedRow.id, "11111111-1111-4111-8111-111111111111"),
+    ).rejects.toThrow(NotFoundException);
+  });
+
   it("throws not found when a report is not owned by the current user", async () => {
     const { db, fns } = createDbMock([]);
     const service = new ReportsService(db as never, queue as never);
