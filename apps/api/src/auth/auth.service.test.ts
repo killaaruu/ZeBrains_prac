@@ -125,4 +125,55 @@ describe("AuthService.createProfile", () => {
     expect(user.id).toBe(mockProfile.id);
     expect(selectCount).toBe(2);
   });
+
+  it("rethrows non-unique-constraint insert errors", async () => {
+    const fatalError = Object.assign(new Error("connection lost"), { code: "08006" });
+    const db = {
+      select: () => makeChain([]),
+      insert: () => ({
+        values: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockRejectedValue(fatalError),
+      }),
+      update: () => makeChain([]),
+    };
+    const service = new AuthService(db as never);
+
+    await expect(
+      service.createProfile("auth-uid-new", "new@example.com", {
+        firstName: "Jane",
+        lastName: "Doe",
+      }),
+    ).rejects.toThrow("connection lost");
+  });
+});
+
+describe("AuthService.updateLastLogin", () => {
+  it("issues an update scoped by authUid with a fresh lastLoginAt", async () => {
+    const where = vi.fn().mockResolvedValue(undefined);
+    const set = vi.fn((_payload: { lastLoginAt: Date }) => ({ where }));
+    const update = vi.fn(() => ({ set }));
+    const service = new AuthService({ update } as never);
+
+    await service.updateLastLogin("auth-uid-123");
+
+    expect(update).toHaveBeenCalledOnce();
+    const setArg = set.mock.calls.at(0)?.[0];
+    expect(setArg?.lastLoginAt).toBeInstanceOf(Date);
+    expect(where).toHaveBeenCalledOnce();
+  });
+});
+
+describe("AuthService.activateByEmail", () => {
+  it("sets status to active scoped by email", async () => {
+    const where = vi.fn().mockResolvedValue(undefined);
+    const set = vi.fn(() => ({ where }));
+    const update = vi.fn(() => ({ set }));
+    const service = new AuthService({ update } as never);
+
+    await service.activateByEmail("user@example.com");
+
+    expect(update).toHaveBeenCalledOnce();
+    expect(set).toHaveBeenCalledWith({ status: "active" });
+    expect(where).toHaveBeenCalledOnce();
+  });
 });
