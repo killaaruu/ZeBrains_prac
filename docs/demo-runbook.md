@@ -25,3 +25,23 @@ Short pre-demo checklist for showing the customer. Full detail: `docs/deployment
    ```bash
    make demo-stop
    ```
+
+## Tech showcase (optional — to demo the stack itself)
+
+All public, served through the stable ngrok domain — open them in the browser
+during the demo to show what's under the hood:
+
+| Show | URL |
+|---|---|
+| **Swagger / OpenAPI** — every API endpoint | `https://electable-suitable-hungry.ngrok-free.dev/api/docs` |
+| **Bull Board** — the BullMQ report-generation queue (job status, retries) | `https://electable-suitable-hungry.ngrok-free.dev/queues` |
+| **Health check** | `https://electable-suitable-hungry.ngrok-free.dev/health` |
+| **Metrics** — process memory / uptime | `https://electable-suitable-hungry.ngrok-free.dev/health/metrics` |
+
+Good moment to open **Bull Board** (`/queues`) while a report is still
+`thinking` — the customer sees the job being processed live. The report itself
+(trend → global/RU market → sustainability score → cited sources) demonstrates
+the Ollama (local GPU LLM) + Tavily (web search) + LangGraph pipeline.
+
+> Note: the **Settings** pages are template demo forms (no backend persistence);
+> the **Example CRUD** vertical is hidden from the production sidebar.

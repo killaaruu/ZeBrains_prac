@@ -172,6 +172,10 @@ The Helm chart (`deploy/charts/api/`) runs migrations as an ArgoCD PreSync hook 
 
 The layer-scaffolder skills (`new-drizzle-table`, `new-shared-schema`, `new-api-module`, `new-client-hook`, `new-frontend-feature`) automate steps 2–3.
 
+## License
+
+Released under the [MIT License](LICENSE).
+
 ## Customization Guide
 
 - **Branding:** `apps/web/index.html` (title), `apps/web/src/shared/assets/logo.tsx` (logo), `apps/web/src/globals.css` (`--brand` color tokens + theme), `sidebar-data.ts` (team name + nav).
