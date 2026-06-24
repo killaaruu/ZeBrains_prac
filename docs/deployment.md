@@ -134,10 +134,11 @@ Vercel auth / project identifiers:
 | Key | Value |
 |---|---|
 | `VERCEL_TOKEN` | secret (GitHub secret / local env) |
-| `VERCEL_ORG_ID` | `team_ORSZJ4ORtWuoPIZNomZFZufT` |
-| `VERCEL_PROJECT_ID` | `prj_ianXFSrTXTZ9q0M48rwutvvtvH12` |
+| `VERCEL_ORG_ID` | `team_xxx` (your Vercel org id) |
+| `VERCEL_PROJECT_ID` | `prj_xxx` (your Vercel project id) |
 
-`VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` are also in `.vercel/project.json`.
+The real `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` live in `.vercel/project.json`
+(gitignored) — read them from there, don't hardcode them in tracked docs.
 
 ## Where `VITE_API_URL` lives
 

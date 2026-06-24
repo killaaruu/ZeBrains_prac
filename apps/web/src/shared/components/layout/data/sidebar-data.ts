@@ -15,7 +15,9 @@ import type { SidebarData } from "../types";
 const isProd = import.meta.env.PROD;
 
 // Add titles here to hide nav items in production builds.
-const hiddenInProd = new Set<string>([]);
+// "Example CRUD" is the template's reference vertical (example-entities) — kept in
+// local dev for reference, hidden from the customer-facing production build.
+const hiddenInProd = new Set<string>(["Example CRUD"]);
 
 const rawSidebarData: SidebarData = {
   user: {
