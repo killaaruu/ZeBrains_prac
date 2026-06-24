@@ -1,8 +1,5 @@
-# Product Template
 
-A production-grade monorepo template for AI-first products. It ships the full engineering setup — backend, frontend, shared packages, local dev orchestration, CI/CD, and GitOps deployment — with **no product domain logic**. Start here, replace the `example` domain, and ship.
-
-## Overview
+# Overview
 
 - **Backend:** NestJS 11 + Drizzle ORM (PostgreSQL) + BullMQ (Redis) + Swagger + Bull Board, JWT auth (Supabase JWKS), health/metrics, structured logging.
 - **Frontend:** React 19 + Vite + TanStack Router + TanStack Query + Zustand + React Hook Form + Zod + Tailwind CSS + shadcn/ui.
