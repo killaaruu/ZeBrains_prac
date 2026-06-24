@@ -46,13 +46,17 @@ export async function bootstrap() {
   app.enableCors({
     origin: [
       "https://trendscout-stage.vercel.app",
-      "https://trendscout-stage-*.vercel.app",
+      // Vercel preview deployments get a generated subdomain. A literal "*" string is
+      // matched verbatim by the cors package (no globbing), so use a RegExp instead.
+      /^https:\/\/trendscout-stage-[a-z0-9-]+\.vercel\.app$/,
       "http://localhost:5173",
       "http://localhost:3000",
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+    // "ngrok-skip-browser-warning" lets the browser send the header the web client
+    // uses to bypass the ngrok tunnel interstitial without tripping CORS preflight.
+    allowedHeaders: ["Content-Type", "Authorization", "Accept", "ngrok-skip-browser-warning"],
   });
 
   const metricsService = app.get(MetricsService);

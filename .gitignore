@@ -8,6 +8,8 @@ dist/
 out/
 __pycache__/
 *.py[cod]
+# Runtime copy of migrations — source of truth is packages/db-backend/src/migrations
+apps/api/migrations/
 
 # Turborepo
 .turbo/
@@ -57,3 +59,29 @@ coverage/
 .worktrees/
 _qry.cjs
 .test-requests.*
+
+.vercel
+.env*
+# ...but per-package example env files ARE tracked (the scaffolder copies them).
+!.env.example
+!**/.env.example
+
+# Local demo runtime (stable ngrok tunnel + local API) — see docs/deployment.md
+.demo.env
+.tools/
+demo-state/
+# Untracked local secrets / superseded helper scripts (never commit)
+api-secrets.yaml
+vercel-env-preview.txt
+run-api-local.ps1
+cloudflared.exe
+ngrok.yml
+# Assignment brief
+*.docx
+
+# Superseded one-off helper scripts (kept on disk, never committed — replaced by
+# bootstrap.ts CORS config and `make demo`)
+cors-patch.js
+patch-cors.js
+patch-cors.sh
+test-ollama*.sh
