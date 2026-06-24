@@ -100,7 +100,24 @@ Notable suites kept by the template:
 
 ## Deployment
 
-The API is containerized (`apps/api/Dockerfile`, multi-stage) and deployed to Kubernetes via Helm. The web app deploys to Vercel (optional). CI runs `pnpm turbo check` on every push/PR (`.github/workflows/ci.yml`).
+The live TrendScout demo does **not** run the API in a cluster. The API + report
+worker run **locally on a GPU host** (they need a local Ollama for LLM inference)
+and are exposed to the Vercel frontend through a **stable ngrok domain**. The web
+app (Vite) is on Vercel and reaches the API via the project env var `VITE_API_URL`
+— set once to the stable ngrok domain, so there's no redeploy churn.
+
+```bash
+make demo        # GPU host: Postgres + Redis + migrations + API + worker + ngrok
+make demo-stop   # tear it down
+```
+
+Push to `staging` (or run the Vercel CLI manually) to deploy the web app. Full
+guide — prerequisites, one-time setup, deploy paths, and troubleshooting — in
+[`docs/deployment.md`](docs/deployment.md); pre-demo checklist in
+[`docs/demo-runbook.md`](docs/demo-runbook.md).
+
+The Helm chart + GitOps path below remains in the repo as the **future
+real-cluster option** and is not used for the current demo.
 
 Build locally:
 
