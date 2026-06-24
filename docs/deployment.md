@@ -16,7 +16,7 @@ inference. The web frontend lives on Vercel and reaches the local API through a
                │ HTTPS (VITE_API_URL)
                ▼
   ┌──────────────────────────┐
-  │  ngrok (reserved domain)  │   https://electable-suitable-hungry.ngrok-free.dev
+  │  ngrok (reserved domain)  │   https://your-app.ngrok-free.dev
   │  stable, never changes    │   ── forwards to localhost:3111
   └────────────┬──────────────┘
                │
@@ -37,7 +37,7 @@ inference. The web frontend lives on Vercel and reaches the local API through a
   `https://trendscout-stage.vercel.app`, built with Vite. The root `vercel.json`
   sets `rootDirectory` to `apps/web`.
 - **Tunnel:** an ngrok **reserved free static domain**
-  `https://electable-suitable-hungry.ngrok-free.dev` forwards to the local API on
+  `https://your-app.ngrok-free.dev` forwards to the local API on
   port `3111`. The domain is permanent (reserved in the ngrok dashboard), so it
   never changes across restarts. The ngrok authtoken is stored once via
   `ngrok config add-authtoken <token>` — it lives in the user's ngrok config, not
@@ -80,7 +80,7 @@ inference. The web frontend lives on Vercel and reaches the local API through a
 2. **ngrok authtoken** — `ngrok config add-authtoken <token>` (once per machine).
 3. **Vercel project env vars** (set once, in the `trendscout-stage` project):
    - `VITE_API_URL` = the ngrok domain
-     (`https://electable-suitable-hungry.ngrok-free.dev`).
+     (`https://your-app.ngrok-free.dev`).
    - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` — the same Supabase
      project as the API.
 
@@ -103,7 +103,7 @@ make demo-stop   # tear it all back down
 `make demo` prints the public ngrok URL. Confirm it is up:
 
 ```bash
-curl https://electable-suitable-hungry.ngrok-free.dev/health
+curl https://your-app.ngrok-free.dev/health
 ```
 
 It should return JSON (not the ngrok interstitial HTML — the web client sends the
@@ -166,7 +166,7 @@ interstitial warning page.
 ## Troubleshooting
 
 - **Frontend can't reach the API.** Check that `make demo` is running on the GPU
-  host and that ngrok is up — `curl https://electable-suitable-hungry.ngrok-free.dev/health`
+  host and that ngrok is up — `curl https://your-app.ngrok-free.dev/health`
   should return JSON.
 - **CORS errors in the browser.** The requesting origin is not in the allowlist in
   `apps/api/src/bootstrap.ts`. Add it (or fix the preview-subdomain RegExp) and
