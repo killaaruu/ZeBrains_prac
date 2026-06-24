@@ -87,7 +87,9 @@ export function scoreSustainability(input: SustainabilityScorerInput): ReportSus
 
   if (argumentsFor.length === 0) {
     argumentsFor.push(
-      `Validated findings still show concrete adoption for ${joinNames(uniqueCompanies.slice(0, 2))}.`,
+      uniqueCompanies.length > 0
+        ? `Validated findings still show concrete adoption for ${joinNames(uniqueCompanies.slice(0, 2))}.`
+        : "No validated market findings surfaced for this trend, so positive sustainability signals are limited.",
     );
   }
 

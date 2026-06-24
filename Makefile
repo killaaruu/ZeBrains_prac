@@ -21,6 +21,7 @@ FILTER := $(if $(PKG),--filter=$(PKG),)
 CMD ?=
 
 .PHONY: help install dev local local-light local-e2e local-run web \
+        demo demo-stop \
         check gate typecheck test build format format-check \
         db-generate db-migrate db-studio
 
@@ -57,6 +58,14 @@ dev: ## 🚀  Start all apps in dev mode (pnpm turbo)
 web: ## 🌐  Start only the web app
 	@printf "🌐  Starting the web app...\n"
 	pnpm turbo dev --filter @repo/web
+
+demo: ## 🎬  Bring up the customer demo (local API+worker behind a stable ngrok domain)
+	@printf "🎬  Starting the demo stack (API + worker + ngrok)...\n"
+	@command -v pwsh >/dev/null 2>&1 && pwsh -File scripts/start-demo.ps1 || powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-demo.ps1
+
+demo-stop: ## 🛑  Stop the demo stack started by `make demo`
+	@printf "🛑  Stopping the demo stack...\n"
+	@command -v pwsh >/dev/null 2>&1 && pwsh -File scripts/stop-demo.ps1 || powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-demo.ps1
 
 local-e2e: ## 🧪  Run the API e2e suite on the prepared local environment
 	@printf "🧪  Running API e2e on the prepared local environment...\n"

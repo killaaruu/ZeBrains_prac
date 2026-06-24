@@ -36,6 +36,16 @@ describe("apiClient", () => {
     expect(http.defaults).toBeDefined();
   });
 
+  it("sends the ngrok-skip-browser-warning header so the ngrok tunnel skips its interstitial", async () => {
+    const axios = (await import("axios")).default;
+    await import("./api-client");
+    expect(axios.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({ "ngrok-skip-browser-warning": "true" }),
+      }),
+    );
+  });
+
   it("apiClient.get resolves with response data", async () => {
     const { apiClient, http } = await import("./api-client");
     vi.mocked(http.get).mockResolvedValueOnce({ data: { id: 1 } } as never);

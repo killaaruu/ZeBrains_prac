@@ -7,6 +7,10 @@ export const http = axios.create({
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
+    // The API is exposed to the Vercel frontend through a free ngrok tunnel, which
+    // serves an HTML interstitial for browser-looking requests. Sending this header
+    // on every request makes ngrok skip it and return the real JSON response.
+    "ngrok-skip-browser-warning": "true",
   },
 });
 

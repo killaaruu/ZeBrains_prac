@@ -52,6 +52,13 @@ describe("AuthController", () => {
     );
   });
 
+  describe("getMe", () => {
+    it("returns the current authenticated user as-is", () => {
+      const user = { ...mockProfile, status: "active" as const, role: "admin" as const };
+      expect(controller.getMe(user as never)).toBe(user);
+    });
+  });
+
   describe("localDevLogin", () => {
     it("issues a local JWT for the seeded local admin when local dev auth is enabled", async () => {
       mockConfigService.get.mockImplementation((key: string) => {
@@ -90,6 +97,74 @@ describe("AuthController", () => {
           password: "MadOSLocalAdmin123!",
         }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it("rejects local dev login when enabled but not fully configured", async () => {
+      mockConfigService.get.mockImplementation((key: string) =>
+        key === "LOCAL_DEV_AUTH_ENABLED" ? "true" : undefined,
+      );
+
+      await expect(
+        controller.localDevLogin({ email: "admin@mad-os.local", password: "x" }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockJwtService.signAsync).not.toHaveBeenCalled();
+    });
+
+    it("rejects local dev login with invalid credentials", async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        const values: Record<string, string> = {
+          LOCAL_DEV_AUTH_ENABLED: "true",
+          LOCAL_DEV_ADMIN_EMAIL: "admin@mad-os.local",
+          LOCAL_DEV_ADMIN_PASSWORD: "MadOSLocalAdmin123!",
+          LOCAL_DEV_ADMIN_AUTH_UID: "00000000-0000-4000-8000-000000000001",
+          SUPABASE_JWT_SECRET: "local-dev-secret",
+        };
+        return values[key];
+      });
+
+      await expect(
+        controller.localDevLogin({ email: "admin@mad-os.local", password: "wrong-password" }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockJwtService.signAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("handleWebhook", () => {
+    it("processes the event when the webhook secret matches", async () => {
+      mockConfigService.get.mockReturnValue("webhook-secret");
+      const event = {
+        type: "user.signed_in" as const,
+        record: { id: "auth-uid" },
+      };
+
+      await expect(controller.handleWebhook("webhook-secret", event)).resolves.toEqual({
+        received: true,
+      });
+      expect(mockWebhookHandler.handle).toHaveBeenCalledWith(event);
+    });
+
+    it("rejects when the webhook secret does not match", async () => {
+      mockConfigService.get.mockReturnValue("webhook-secret");
+
+      await expect(
+        controller.handleWebhook("wrong-secret", {
+          type: "user.signed_in",
+          record: { id: "auth-uid" },
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockWebhookHandler.handle).not.toHaveBeenCalled();
+    });
+
+    it("rejects when no expected webhook secret is configured", async () => {
+      mockConfigService.get.mockReturnValue(undefined);
+
+      await expect(
+        controller.handleWebhook("any-secret", {
+          type: "user.signed_in",
+          record: { id: "auth-uid" },
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockWebhookHandler.handle).not.toHaveBeenCalled();
     });
   });
 
