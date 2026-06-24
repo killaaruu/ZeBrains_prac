@@ -210,6 +210,16 @@ export function Dashboard({ reportId = null }: DashboardProps) {
     }
   }, [navigate, reportId, reports.data]);
 
+  // Drop a stale ?reportId that no longer exists (e.g. a bookmarked link to a
+  // report from an old database) so the dashboard falls back to the first report
+  // or the empty state instead of looping on a 404.
+  useEffect(() => {
+    const status = (detail.error as { status?: number } | null)?.status;
+    if (reportId && status === 404) {
+      navigate({ to: "/dashboard", search: {} });
+    }
+  }, [navigate, reportId, detail.error]);
+
   const selectedReport =
     detail.data ?? reports.data?.find((report) => report.id === reportId) ?? null;
   const selectedStatusMeta = selectedReport ? reportStatusMeta[selectedReport.status] : null;
