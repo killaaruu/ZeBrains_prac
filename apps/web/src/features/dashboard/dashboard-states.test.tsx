@@ -86,6 +86,17 @@ describe("Dashboard states", () => {
     setReportState(null);
   });
 
+  it("clears a stale reportId from the URL when the report 404s", async () => {
+    setReportsState({ data: [] });
+    mockUseReport.mockReturnValue({ data: undefined, error: { status: 404 }, isError: true });
+
+    render(<Dashboard reportId="does-not-exist" />);
+
+    await vi.waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith({ to: "/dashboard", search: {} });
+    });
+  });
+
   it("shows the loading copy while reports are loading", () => {
     setReportsState({ data: undefined, isLoading: true });
 

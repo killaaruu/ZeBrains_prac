@@ -43,6 +43,19 @@ describe("scoreSustainability", () => {
     );
   });
 
+  it("emits a clean fallback argument (no empty placeholder) when no findings exist", () => {
+    const sustainability = scoreSustainability({
+      globalMarket: [],
+      ruMarket: ruMarketNotFound,
+    });
+
+    expect(sustainability.arguments_for.length).toBeGreaterThan(0);
+    for (const argument of sustainability.arguments_for) {
+      expect(argument.trim().length).toBeGreaterThan(0);
+      expect(argument).not.toMatch(/for\s*\.\s*$/);
+    }
+  });
+
   it("penalizes narrow evidence and missing RU implementations", () => {
     const sustainability = scoreSustainability({
       globalMarket: [

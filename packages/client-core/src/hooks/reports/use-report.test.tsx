@@ -60,4 +60,19 @@ describe("useReport", () => {
       queryClient.getQueryCache().find({ queryKey: reportKeys.detail(report.id) }),
     ).toBeDefined();
   });
+
+  it("does not retry when the report is missing (4xx) — fails fast", async () => {
+    const fetcher = vi.fn().mockRejectedValue({ status: 404, message: "Not found" });
+    // A QueryClient with retries enabled, so useReport's own retry predicate decides.
+    const queryClient = new QueryClient();
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: queryClient }, children);
+
+    const { result } = renderHook(() => useReport({ id: "missing", fetcher }), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
 });
