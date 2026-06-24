@@ -79,6 +79,9 @@ ngrok.yml
 # Assignment brief
 *.docx
 
+# Local-only engineering notes (e.g. internal backlogs) — never committed
+*.local.md
+
 # Superseded one-off helper scripts (kept on disk, never committed — replaced by
 # bootstrap.ts CORS config and `make demo`)
 cors-patch.js
