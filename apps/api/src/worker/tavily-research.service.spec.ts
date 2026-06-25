@@ -88,6 +88,38 @@ describe("TavilyResearchService", () => {
     );
   });
 
+  it("requests full raw page content and surfaces it on the candidate", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      createResponse([
+        {
+          title: "GitHub Copilot momentum",
+          url: "https://example.com/copilot",
+          content: "Copilot adoption continues to grow.",
+          raw_content: "Full page: GitHub ships Copilot to enterprises.",
+        },
+      ]),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const service = new TavilyResearchService(createConfigService());
+
+    await expect(service.search(["AI coding assistants market"])).resolves.toEqual([
+      {
+        title: "GitHub Copilot momentum",
+        url: "https://example.com/copilot",
+        snippet: "Copilot adoption continues to grow.",
+        rawContent: "Full page: GitHub ships Copilot to enterprises.",
+      },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        body: expect.stringContaining('"include_raw_content":true'),
+      }),
+    );
+  });
+
   it("throws when the Tavily API key is missing", async () => {
     vi.stubGlobal("fetch", vi.fn());
     const service = new TavilyResearchService(createConfigService(""));

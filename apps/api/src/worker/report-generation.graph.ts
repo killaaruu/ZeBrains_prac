@@ -16,6 +16,7 @@ import {
   type SustainabilityScorerInput,
   scoreSustainability,
 } from "../report-generation/sustainability-scorer";
+import { AGGREGATOR_TOKENS } from "./aggregators";
 import { OllamaProvider } from "./ollama.provider";
 import { TavilyResearchService, type TavilySourceCandidate } from "./tavily-research.service";
 
@@ -31,6 +32,24 @@ const analysisSchema = z.object({
   ru_market: reportRuMarketSchema,
 });
 
+// Schema handed to the local model. Deliberately LOOSE — plain required arrays with no
+// `Не найдено` union branch. The strict union grammar made small models take the cheap
+// sentinel branch and return "not found" even for company-rich pages; with arrays-only
+// they reliably extract real vendors. Emptiness → sentinel is decided in code afterwards,
+// and `sources` is free text because models cite by title/url inconsistently (resolved later).
+const llmMarketItemSchema = z.object({
+  product: z.string(),
+  company: z.string(),
+  effects: z.string(),
+  sources: z.array(z.string()),
+});
+const llmAnalysisSchema = z.object({
+  trend_name: z.string(),
+  global_market: z.array(llmMarketItemSchema),
+  ru_market: z.array(llmMarketItemSchema),
+});
+type LlmMarketItem = z.infer<typeof llmMarketItemSchema>;
+
 // Used to translate a non-English (e.g. Russian) topic into an English search
 // term so the GLOBAL-market search hits the rich English-language web, which the
 // local model extracts far better than sparse Russian results.
@@ -40,6 +59,11 @@ type ReportAnalysis = z.infer<typeof analysisSchema>;
 
 const LINK_VALIDATION_TIMEOUT_MS = 1_500;
 const LINK_VALIDATION_CONCURRENCY = 3;
+
+// Cap per-source raw page text fed to the analyst. Full Tavily raw content can be tens
+// of KB; the analyst has a 20s budget + 4096 max tokens, so truncate to keep the prompt
+// affordable while still giving the model enough text to name real companies.
+const RAW_CONTENT_CHAR_LIMIT = 1_200;
 const NODE_TIMEOUT_MS = {
   "input-guard": 1_000,
   planner: 10_000,
@@ -290,45 +314,139 @@ export class ReportGenerationGraph {
     const analysis = await this.ollamaProvider.generate(
       [
         "Analyst",
-        "Split the validated evidence into global and Russia market findings.",
-        "Return JSON with trend_name, global_market, and ru_market only.",
-        "Write every text value in the same language as the user topic (Russian topic → Russian text).",
-        `If a market has no surviving sourced facts, return "${marketNotFound}" for that market.`,
-        `If Russia has no implementations at all, return "${ruMarketNotFound}" for ru_market.`,
+        "From the sources below, extract the real product or vendor COMPANIES named in the page text.",
+        "Output ONE company per item. If a page lists several companies, create a SEPARATE item for each company.",
+        "If a page is a ranking, a 'top companies' article, or a market report, output the companies it names — never the website, publisher, or research firm itself.",
+        'company = the organization name ONLY (e.g. "Tesla", "Fanuc", "Vishay") — no country, no parenthetical, no description, no domain or URL.',
+        "product = that company's OWN concrete product or offering for this topic (never a competitor's product or another company's name). effects = a concrete fact about it (adoption, market share, capability, numbers).",
+        "A company belongs in ru_market ONLY if it is a Russian company (founded or headquartered in Russia). A foreign company that merely sells or operates in Russia still belongs in global_market. Do not put a company in ru_market just because the source page is in Russian.",
+        "List as many real companies as the sources support; never invent companies that are not in the sources.",
+        "In sources, copy the exact url of the source you used for that company.",
+        "Write every text value in the same language as the user topic (Russian topic → Russian text); keep company and product proper nouns unchanged.",
+        "Return JSON with trend_name, global_market (array), and ru_market (array). Use an empty array for a market that has no real companies.",
         state.guardedTopic,
-        `Validated sources: ${JSON.stringify(relevantSources)}`,
+        `Sources: ${JSON.stringify(this.buildAnalystSources(relevantSources))}`,
       ].join("\n"),
-      analysisSchema,
+      llmAnalysisSchema,
       { timeoutMs: this.nodeTimeoutMs("analyst") },
     );
 
-    const extractedMarkets = this.extractMarketsFromSources(relevantSources);
-    const globalMarket = this.sanitizeMarketSection(analysis.global_market, relevantSources);
-    const ruMarket = this.sanitizeRuMarketSection(analysis.ru_market, relevantSources);
-
-    const finalGlobal =
-      globalMarket === marketNotFound && extractedMarkets.global_market.length > 0
-        ? extractedMarkets.global_market
-        : globalMarket;
-    const finalRu =
-      ruMarket === marketNotFound && extractedMarkets.ru_market.length > 0
-        ? extractedMarkets.ru_market
-        : ruMarket;
+    const globalItems = this.cleanLlmMarket(analysis.global_market, relevantSources);
+    // A company that also appears in global is clearly not Russia-specific — small models
+    // dump foreign brands into ru_market off Russia-context listicles, so drop the overlap.
+    const globalKeys = new Set(globalItems.map((item) => this.normalizeCompanyKey(item.company)));
+    const ruItems = this.cleanLlmMarket(analysis.ru_market, relevantSources).filter(
+      (item) => !globalKeys.has(this.normalizeCompanyKey(item.company)),
+    );
 
     return {
       analysis: {
         trend_name: state.topic,
-        global_market: this.dedupeMarket(finalGlobal),
-        ru_market: this.dedupeMarket(finalRu),
+        global_market: globalItems.length > 0 ? globalItems : marketNotFound,
+        ru_market:
+          ruItems.length > 0 ? ruItems : globalItems.length > 0 ? ruMarketNotFound : marketNotFound,
       },
     };
   }
 
-  /** Collapse duplicate companies (small models repeat the same vendor); leaves sentinels untouched. */
-  private dedupeMarket<T extends ReportMarketItem[] | string>(value: T): T {
-    return Array.isArray(value) ? (this.deduplicateMarketByCompany(value) as T) : value;
+  /**
+   * Turn the model's loose market array into contract-valid items: trim, drop junk/
+   * aggregator/empty companies, and resolve each item's cited sources back to real
+   * validated URLs (models cite by title or url inconsistently). Then collapse vendor
+   * repeats. Items the model couldn't ground in a fed source are dropped.
+   */
+  private cleanLlmMarket(
+    items: readonly LlmMarketItem[],
+    fedSources: readonly TavilySourceCandidate[],
+  ): ReportMarketItem[] {
+    if (!Array.isArray(items)) {
+      return [];
+    }
+    const cleaned: ReportMarketItem[] = [];
+    for (const item of items) {
+      const product = item.product.trim();
+      const effects = item.effects.trim();
+      if (!product || !effects) {
+        continue;
+      }
+      const sources = this.resolveItemSources(item.sources, fedSources);
+      if (sources.length === 0) {
+        continue;
+      }
+      // The model sometimes packs several companies into one field; split into one
+      // item each, dropping junk/aggregator names.
+      for (const company of this.splitCompanies(item.company)) {
+        if (!this.isInvalidCompany(company)) {
+          cleaned.push({ product, company, effects, sources: [...sources] });
+        }
+      }
+    }
+    return this.deduplicateMarketByCompany(cleaned);
   }
 
+  /**
+   * Normalize the model's `company` value into one or more clean organization names:
+   * strip parenthetical descriptions ("Xpanceo (Dubai startup)" → "Xpanceo") and split
+   * comma / "and" / "и" lists ("Severstal, DST-Ural" → two names).
+   */
+  private splitCompanies(raw: string): string[] {
+    const withoutParens = raw.replace(/\s*\([^)]*\)/gu, " ");
+    return withoutParens
+      .split(/\s*(?:,|;|·|\band\b|\bи\b)\s*/u)
+      .map((part) => part.trim())
+      .filter((part) => part.length >= 2 && part.length <= 50);
+  }
+
+  /**
+   * Map the model's free-text source citations back to real validated URLs. Matches by
+   * normalized url, then by normalized title, then fuzzily. If nothing resolves, attribute
+   * to the fed source set (all validated + topic-relevant) so a real company is not lost.
+   */
+  private resolveItemSources(
+    rawSources: readonly string[],
+    fedSources: readonly TavilySourceCandidate[],
+  ): string[] {
+    const byUrl = new Map(fedSources.map((s) => [this.normalizeUrl(s.url), s.url]));
+    const byTitle = new Map(
+      fedSources.map((s) => [this.normalizeTitleKey(s.title), s.url] as const).filter(([k]) => k),
+    );
+    const resolved = new Set<string>();
+
+    for (const raw of rawSources ?? []) {
+      const text = String(raw).trim();
+      if (!text) {
+        continue;
+      }
+      const urlHit = byUrl.get(this.normalizeUrl(text));
+      if (urlHit) {
+        resolved.add(urlHit);
+        continue;
+      }
+      const titleKey = this.normalizeTitleKey(text);
+      const titleHit = titleKey ? byTitle.get(titleKey) : undefined;
+      if (titleHit) {
+        resolved.add(titleHit);
+        continue;
+      }
+      const fuzzy = fedSources.find((s) => {
+        const tk = this.normalizeTitleKey(s.title);
+        return (tk.length >= 6 && titleKey.includes(tk)) || text.includes(s.url);
+      });
+      if (fuzzy) {
+        resolved.add(fuzzy.url);
+      }
+    }
+
+    // No best-effort fallback: an item we can't ground in a fed source is dropped, so a
+    // hallucinated company with a bogus citation never inherits a real URL.
+    return [...resolved];
+  }
+
+  private normalizeTitleKey(value: string): string {
+    return value.toLowerCase().replace(/[^a-z0-9]+/gu, "");
+  }
+
+  /** Collapse duplicate companies (small models repeat the same vendor). */
   private deduplicateMarketByCompany(items: readonly ReportMarketItem[]): ReportMarketItem[] {
     const byCompany = new Map<string, ReportMarketItem>();
     for (const item of items) {
@@ -352,20 +470,20 @@ export class ReportGenerationGraph {
       state.validatedSources,
     );
     const extractedMarkets = this.extractMarketsFromSources(relevantSources);
+    const prunedGlobal = this.pruneSection(extractedMarkets.global_market);
+    const prunedRu = this.pruneSection(extractedMarkets.ru_market);
 
     return {
       analysis: {
         trend_name: state.topic,
-        global_market:
-          extractedMarkets.global_market.length > 0
-            ? this.deduplicateMarketByCompany(extractedMarkets.global_market)
+        global_market: Array.isArray(prunedGlobal)
+          ? this.deduplicateMarketByCompany(prunedGlobal)
+          : marketNotFound,
+        ru_market: Array.isArray(prunedRu)
+          ? this.deduplicateMarketByCompany(prunedRu)
+          : Array.isArray(prunedGlobal)
+            ? ruMarketNotFound
             : marketNotFound,
-        ru_market:
-          extractedMarkets.ru_market.length > 0
-            ? this.deduplicateMarketByCompany(extractedMarkets.ru_market)
-            : extractedMarkets.global_market.length > 0
-              ? ruMarketNotFound
-              : marketNotFound,
       },
     };
   }
@@ -448,23 +566,25 @@ export class ReportGenerationGraph {
   private buildSeedQueries(topic: string, englishTopic: string = topic): string[] {
     const normalizedTopic = topic.trim();
 
+    // Bias queries toward pages that NAME real companies (listicles, vendor sites,
+    // news, startup lists) rather than "market size report" SEO mills — those produce
+    // extractable vendor names for the analyst. Global queries go out in English (richer
+    // web coverage); the Russia-specific queries stay Russian.
     if (/[А-Яа-яЁё]/u.test(normalizedTopic)) {
-      // Global-market queries go out in English (richer web coverage); the
-      // Russia-specific query stays Russian.
       const english = englishTopic.trim() || normalizedTopic;
       return [
-        `${english} companies products market`,
-        `${english} global market companies products`,
-        `${normalizedTopic} Россия компании продукты внедрение`,
-        normalizedTopic,
+        `top ${english} companies`,
+        `leading ${english} companies and products`,
+        `${normalizedTopic} российские компании и производители`,
+        `${normalizedTopic} Россия компании внедрение`,
       ];
     }
 
     return [
-      normalizedTopic,
-      `${normalizedTopic} companies products market`,
-      `${normalizedTopic} Russia companies products adoption`,
-      `${normalizedTopic} global market companies products`,
+      `top ${normalizedTopic} companies`,
+      `leading ${normalizedTopic} companies and products`,
+      `${normalizedTopic} startups and product launches`,
+      `Russian ${normalizedTopic} companies and manufacturers`,
     ];
   }
 
@@ -519,30 +639,6 @@ export class ReportGenerationGraph {
 
   private isAbortError(error: unknown): boolean {
     return error instanceof DOMException && error.name === "AbortError";
-  }
-
-  private sanitizeMarketSection(
-    section: ReportAnalysis["global_market"],
-    validatedSources: readonly TavilySourceCandidate[],
-  ): ReportAnalysis["global_market"] {
-    if (section === marketNotFound) {
-      return marketNotFound;
-    }
-
-    const sanitizedItems = this.keepOnlyValidatedSources(section, validatedSources);
-    return sanitizedItems.length > 0 ? sanitizedItems : marketNotFound;
-  }
-
-  private sanitizeRuMarketSection(
-    section: ReportAnalysis["ru_market"],
-    validatedSources: readonly TavilySourceCandidate[],
-  ): ReportAnalysis["ru_market"] {
-    if (section === ruMarketNotFound || section === marketNotFound) {
-      return section;
-    }
-
-    const sanitizedItems = this.keepOnlyValidatedSources(section, validatedSources);
-    return sanitizedItems.length > 0 ? sanitizedItems : marketNotFound;
   }
 
   private extractMarketsFromSources(validatedSources: readonly TavilySourceCandidate[]): {
@@ -616,22 +712,34 @@ export class ReportGenerationGraph {
     const topicTokens = this.extractTopicTokens(topic);
     let score = topicTokens.reduce((total, token) => total + (haystack.includes(token) ? 3 : 0), 0);
 
+    // Reward pages that enumerate or belong to real companies — listicles, vendor
+    // sites, news, startup lists. These are what the analyst can extract names from.
     if (
-      /market|рынок|adoption|внедрение|sales|share|forecast|analysis|oem|segment/u.test(haystack)
+      /top \d+|leading|companies|startups|vendors|manufacturers|product|launch|компани|производ|обзор/u.test(
+        haystack,
+      )
     ) {
       score += 6;
     }
 
-    if (/wikipedia|what is|catalog|shop|store|hoodie|merch|accessor/u.test(haystack)) {
-      score -= 8;
+    // Concrete market signal still helps a little, but market-research jargon alone no
+    // longer dominates (it used to pull SEO "market size" mills to the top).
+    if (/market share|adoption|внедрение|sales|продаж/u.test(haystack)) {
+      score += 2;
     }
 
+    // Generic explainers / encyclopedias / merch — nothing to extract.
     if (
-      /counterpoint|iea|statista|marketsandmarkets|kenresearch|tadviser|electromobili/u.test(
+      /wikipedia|britannica|what is|definition|catalog|shop|store|hoodie|merch|accessor/u.test(
         haystack,
       )
     ) {
-      score += 4;
+      score -= 8;
+    }
+
+    // Market-research mills (also excluded at Tavily; this is a backstop if one slips in).
+    if (AGGREGATOR_TOKENS.some((token) => haystack.includes(token))) {
+      score -= 10;
     }
 
     return score;
@@ -675,6 +783,80 @@ export class ReportGenerationGraph {
     }
   }
 
+  /** Lowercase + alphanumerics only, so "Mordor Intelligence" → "mordorintelligence". */
+  private normalizeCompanyKey(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9]+/gu, "");
+  }
+
+  /**
+   * A `company` is junk (and its market item must be dropped) when it is empty/Unknown,
+   * resolves to a market-research aggregator, or reads as a description sentence rather
+   * than a concrete organization name.
+   */
+  private isInvalidCompany(name: string): boolean {
+    const trimmed = name.trim();
+    const lower = trimmed.toLowerCase();
+    if (trimmed.length < 2) {
+      return true;
+    }
+    // Generic placeholders the model emits when it can't name a real company.
+    if (
+      /^(unknown|n\/?a|n\.a\.?|various.*|other.*|companies?|vendors?|the company|strategy research|market|none)$/u.test(
+        lower,
+      )
+    ) {
+      return true;
+    }
+    // Bare corporate suffix left over from a bad comma split ("…Co., Ltd." → "Ltd.").
+    if (/^(ltd|inc|co|corp|llc|plc|gmbh|ag|sa|bv|nv)\.?$/u.test(lower)) {
+      return true;
+    }
+    // A domain or URL leaked in as a company ("Rucars.ru", "example.com").
+    if (
+      /https?:\/\//u.test(lower) ||
+      lower.includes("www.") ||
+      /\.(ru|com|org|net|io|ai|co|dev|gov|edu|info|biz)\b/u.test(lower)
+    ) {
+      return true;
+    }
+
+    const key = this.normalizeCompanyKey(trimmed);
+    if (key.length < 2 || AGGREGATOR_TOKENS.some((token) => key.includes(token))) {
+      return true;
+    }
+
+    const wordCount = trimmed.split(/\s+/u).length;
+    return wordCount >= 6 || trimmed.length > 60;
+  }
+
+  /** Drop items with a junk company; an emptied array collapses to the honest sentinel. */
+  private pruneSection<T extends ReportMarketItem[] | string>(
+    section: T,
+  ): T | typeof marketNotFound {
+    if (!Array.isArray(section)) {
+      return section;
+    }
+
+    const kept = section.filter((item) => !this.isInvalidCompany(item.company));
+    return kept.length > 0 ? (kept as T) : marketNotFound;
+  }
+
+  /**
+   * Project sources for the analyst prompt: keep the lightweight fields and append the
+   * (truncated) raw page text so the model can name the real companies in the page,
+   * without blowing the analyst token/time budget on full-page dumps.
+   */
+  private buildAnalystSources(
+    sources: readonly TavilySourceCandidate[],
+  ): Array<{ title: string; url: string; snippet: string; content?: string }> {
+    return sources.map((source) => ({
+      title: source.title,
+      url: source.url,
+      snippet: source.snippet,
+      content: source.rawContent ? source.rawContent.slice(0, RAW_CONTENT_CHAR_LIMIT) : undefined,
+    }));
+  }
+
   // Small local models rarely reproduce a source URL byte-for-byte (trailing
   // slash, www, http vs https), so match on a normalized form instead of exact
   // string — otherwise every market item gets dropped and reports read "Не найдено".
@@ -685,25 +867,6 @@ export class ReportGenerationGraph {
     } catch {
       return value.trim().toLowerCase();
     }
-  }
-
-  private keepOnlyValidatedSources(
-    items: readonly ReportMarketItem[],
-    validatedSources: readonly TavilySourceCandidate[],
-  ): ReportMarketItem[] {
-    const allowedUrls = new Set(validatedSources.map((source) => this.normalizeUrl(source.url)));
-
-    return items.flatMap((item) => {
-      const sources = [
-        ...new Set(item.sources.filter((source) => allowedUrls.has(this.normalizeUrl(source)))),
-      ];
-
-      if (sources.length === 0) {
-        return [];
-      }
-
-      return [{ ...item, sources }];
-    });
   }
 
   private async mapWithConcurrency<TInput, TOutput>(
