@@ -26,6 +26,8 @@ const generatedReport: ReportResult = {
   },
 };
 
+// The analyst now returns LOOSE arrays (no "Не найдено" union branch); an empty ru array
+// is turned into the ru sentinel by the graph because global has findings.
 const generatedAnalysis = {
   trend_name: "AI coding assistants",
   global_market: [
@@ -36,7 +38,7 @@ const generatedAnalysis = {
       sources: ["https://example.com/copilot"],
     },
   ],
-  ru_market: ruMarketNotFound,
+  ru_market: [],
 };
 
 const generatedSustainability = {
@@ -159,10 +161,10 @@ describe("ReportGenerationGraph", () => {
 
     expect(provider.generate).toHaveBeenCalledTimes(1);
     expect(tavilyResearchService.search).toHaveBeenCalledWith([
-      "AI coding assistants",
-      "AI coding assistants companies products market",
-      "AI coding assistants Russia companies products adoption",
-      "AI coding assistants global market companies products",
+      "top AI coding assistants companies",
+      "leading AI coding assistants companies and products",
+      "AI coding assistants startups and product launches",
+      "Russian AI coding assistants companies and manufacturers",
     ]);
     expect(provider.generate).toHaveBeenNthCalledWith(
       1,
@@ -218,12 +220,12 @@ describe("ReportGenerationGraph", () => {
       topic,
     });
 
-    // Russian topic → global-market queries go out in English; the Russia query stays Russian.
+    // Russian topic → global-market queries go out in English; the Russia queries stay Russian.
     expect(tavilyResearchService.search).toHaveBeenCalledWith([
-      `${english} companies products market`,
-      `${english} global market companies products`,
-      `${topic} Россия компании продукты внедрение`,
-      topic,
+      `top ${english} companies`,
+      `leading ${english} companies and products`,
+      `${topic} российские компании и производители`,
+      `${topic} Россия компании внедрение`,
     ]);
   });
 
@@ -473,7 +475,7 @@ describe("ReportGenerationGraph", () => {
             sources: ["https://example.com/copilot"],
           },
         ],
-        ru_market: "Не найдено",
+        ru_market: ruMarketNotFound,
       },
     });
   });
@@ -551,13 +553,13 @@ describe("ReportGenerationGraph", () => {
     });
   });
 
-  it("falls back to deterministic market extraction when the analyst returns no markets", async () => {
+  it("returns honest sentinels (no domain fallback) when the analyst finds no companies", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = {
       generate: vi.fn().mockResolvedValue({
-        trend_name: "Russia Economic and Political Overview",
-        global_market: marketNotFound,
-        ru_market: marketNotFound,
+        trend_name: "electric vehicles",
+        global_market: [],
+        ru_market: [],
       }),
     };
     const tavilyResearchService = { search: vi.fn() };
@@ -565,69 +567,21 @@ describe("ReportGenerationGraph", () => {
     const topic = "electric vehicles";
 
     await expect(
-      (
-        graph as unknown as {
-          analyze: (state: {
-            topic: string;
-            guardedTopic: string;
-            validatedSources: Array<{ title: string; url: string; snippet: string }>;
-          }) => Promise<{
-            analysis: {
-              trend_name: string;
-              global_market:
-                | string
-                | Array<{
-                    product: string;
-                    company: string;
-                    effects: string;
-                    sources: string[];
-                  }>;
-              ru_market:
-                | string
-                | Array<{
-                    product: string;
-                    company: string;
-                    effects: string;
-                    sources: string[];
-                  }>;
-            };
-          }>;
-        }
-      ).analyze({
+      (graph as unknown as AnalyzeOnlyGraph).analyze({
         topic,
-        guardedTopic: topic,
         validatedSources: [
           {
             title: "Tesla expands lower-cost EV lineup",
             url: "https://tesla.com/news/affordable-ev",
             snippet: "Tesla is scaling production to widen electric vehicle adoption globally.",
           },
-          {
-            title: "Moskvich expands EV production in Russia",
-            url: "https://moskvich.ru/news/electro",
-            snippet: "Russian automaker expands electric vehicle sales and local production.",
-          },
         ],
       }),
     ).resolves.toEqual({
       analysis: {
         trend_name: topic,
-        global_market: [
-          {
-            product: "Tesla expands lower-cost EV lineup",
-            company: "Tesla",
-            effects: "Tesla is scaling production to widen electric vehicle adoption globally.",
-            sources: ["https://tesla.com/news/affordable-ev"],
-          },
-        ],
-        ru_market: [
-          {
-            product: "Moskvich expands EV production in Russia",
-            company: "Moskvich",
-            effects: "Russian automaker expands electric vehicle sales and local production.",
-            sources: ["https://moskvich.ru/news/electro"],
-          },
-        ],
+        global_market: marketNotFound,
+        ru_market: marketNotFound,
       },
     });
   });
@@ -679,7 +633,7 @@ describe("ReportGenerationGraph", () => {
     });
   });
 
-  it("prefers market-specific sources over generic explainers and catalog pages", async () => {
+  it("prefers company-naming pages (listicles, vendor news) over explainers and aggregators", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = { generate: vi.fn() };
     const tavilyResearchService = { search: vi.fn() };
@@ -701,31 +655,31 @@ describe("ReportGenerationGraph", () => {
           snippet: "Generic encyclopedia overview of electric vehicles.",
         },
         {
-          title: "Premium EV lifestyle hoodie",
-          url: "https://ev-shop.example.com/hoodie",
-          snippet: "Merchandise for EV fans.",
+          title: "Top 10 electric vehicle companies",
+          url: "https://technologymagazine.com/top-10-ev-companies",
+          snippet: "Leading electric vehicles companies and their products.",
         },
         {
-          title: "Global Electric Vehicle Market Share: Quarterly",
-          url: "https://counterpointresearch.com/en/insights/global-electric-vehicle-market-share-quarterly",
-          snippet: "Quarterly market share, OEM rankings, and adoption drivers.",
+          title: "Electric Vehicle Market Size Report",
+          url: "https://www.statista.com/ev-market",
+          snippet: "Electric vehicles market size and forecast.",
         },
         {
-          title: "Russia Electric Cars Market 2019-2030",
-          url: "https://www.kenresearch.com/russia-electric-cars-market",
-          snippet: "Russia EV market segmentation, players, and adoption forecasts.",
+          title: "Tesla and BYD expand electric vehicle sales",
+          url: "https://reuters.com/ev-news",
+          snippet: "Tesla and BYD report record electric vehicles sales.",
         },
       ]),
     ).toEqual([
       {
-        title: "Global Electric Vehicle Market Share: Quarterly",
-        url: "https://counterpointresearch.com/en/insights/global-electric-vehicle-market-share-quarterly",
-        snippet: "Quarterly market share, OEM rankings, and adoption drivers.",
+        title: "Top 10 electric vehicle companies",
+        url: "https://technologymagazine.com/top-10-ev-companies",
+        snippet: "Leading electric vehicles companies and their products.",
       },
       {
-        title: "Russia Electric Cars Market 2019-2030",
-        url: "https://www.kenresearch.com/russia-electric-cars-market",
-        snippet: "Russia EV market segmentation, players, and adoption forecasts.",
+        title: "Tesla and BYD expand electric vehicle sales",
+        url: "https://reuters.com/ev-news",
+        snippet: "Tesla and BYD report record electric vehicles sales.",
       },
     ]);
   });
@@ -878,5 +832,426 @@ describe("ReportGenerationGraph", () => {
     // Pipeline continued past the failed node; the assembler saw the degraded
     // analysis (markets fell back to "Не найдено"). Two model calls: translate + analyst.
     expect(provider.generate).toHaveBeenCalledTimes(2);
+  });
+
+  type AnalyzeOnlyGraph = {
+    analyze: (state: {
+      topic: string;
+      validatedSources: Array<{ title: string; url: string; snippet: string }>;
+    }) => Promise<{
+      analysis: {
+        trend_name: string;
+        global_market:
+          | string
+          | Array<{ product: string; company: string; effects: string; sources: string[] }>;
+        ru_market:
+          | string
+          | Array<{ product: string; company: string; effects: string; sources: string[] }>;
+      };
+    }>;
+  };
+
+  it("drops analyst items whose company is a market-research aggregator", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = {
+      generate: vi.fn().mockResolvedValue({
+        trend_name: "AI coding assistants",
+        global_market: [
+          {
+            product: "Copilot",
+            company: "GitHub",
+            effects: "Developer productivity gains",
+            sources: ["https://example.com/copilot"],
+          },
+          {
+            product: "AI coding assistants market report",
+            company: "MarketsAndMarkets",
+            effects: "Market sized at billions",
+            sources: ["https://example.com/report"],
+          },
+          {
+            product: "Trend overview",
+            company: "Mordor Intelligence",
+            effects: "Growth forecast",
+            sources: ["https://example.com/mordor"],
+          },
+        ],
+        ru_market: ruMarketNotFound,
+      }),
+    };
+    const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
+
+    await expect(
+      (graph as unknown as AnalyzeOnlyGraph).analyze({
+        topic: "AI coding assistants",
+        validatedSources: [
+          {
+            title: "GitHub Copilot coding assistants momentum",
+            url: "https://example.com/copilot",
+            snippet: "Global coding assistants usage continues to grow.",
+          },
+          {
+            title: "AI coding assistants market report",
+            url: "https://example.com/report",
+            snippet: "Coding assistants market research overview.",
+          },
+          {
+            title: "Mordor coding assistants overview",
+            url: "https://example.com/mordor",
+            snippet: "Coding assistants market research overview.",
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      analysis: {
+        trend_name: "AI coding assistants",
+        global_market: [
+          {
+            product: "Copilot",
+            company: "GitHub",
+            effects: "Developer productivity gains",
+            sources: ["https://example.com/copilot"],
+          },
+        ],
+        ru_market: ruMarketNotFound,
+      },
+    });
+  });
+
+  it("drops analyst items whose company is a description sentence, not a name", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = {
+      generate: vi.fn().mockResolvedValue({
+        trend_name: "cybersecurity",
+        global_market: [
+          {
+            product: "Threat platform",
+            company: "Global cybersecurity provider with a presence in Russia",
+            effects: "Broad protection",
+            sources: ["https://example.com/desc"],
+          },
+          {
+            product: "CrowdStrike Falcon",
+            company: "CrowdStrike",
+            effects: "Endpoint protection adoption",
+            sources: ["https://example.com/crowdstrike"],
+          },
+        ],
+        ru_market: ruMarketNotFound,
+      }),
+    };
+    const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
+
+    await expect(
+      (graph as unknown as AnalyzeOnlyGraph).analyze({
+        topic: "cybersecurity",
+        validatedSources: [
+          {
+            title: "Description source",
+            url: "https://example.com/desc",
+            snippet: "A generic provider description.",
+          },
+          {
+            title: "CrowdStrike Falcon",
+            url: "https://example.com/crowdstrike",
+            snippet: "Endpoint protection adoption.",
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      analysis: {
+        trend_name: "cybersecurity",
+        global_market: [
+          {
+            product: "CrowdStrike Falcon",
+            company: "CrowdStrike",
+            effects: "Endpoint protection adoption",
+            sources: ["https://example.com/crowdstrike"],
+          },
+        ],
+        ru_market: ruMarketNotFound,
+      },
+    });
+  });
+
+  it("returns the honest sentinel when every company is an aggregator domain", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = {
+      generate: vi.fn().mockResolvedValue({
+        trend_name: "market sizing",
+        global_market: [
+          {
+            product: "Market report",
+            company: "Statista",
+            effects: "Statistics portal",
+            sources: ["https://www.statista.com/report"],
+          },
+        ],
+        ru_market: ruMarketNotFound,
+      }),
+    };
+    const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
+
+    await expect(
+      (graph as unknown as AnalyzeOnlyGraph).analyze({
+        topic: "market sizing",
+        validatedSources: [
+          {
+            title: "Statista market sizing report",
+            url: "https://www.statista.com/report",
+            snippet: "Market sizing statistics portal.",
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      analysis: {
+        trend_name: "market sizing",
+        global_market: marketNotFound,
+        ru_market: marketNotFound,
+      },
+    });
+  });
+
+  it("keeps aggregator domains out of the top sources fed to the analyst", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const graph = new ReportGenerationGraph(
+      { generate: vi.fn() } as never,
+      { search: vi.fn() } as never,
+    );
+
+    const selected = (
+      graph as unknown as {
+        selectRelevantSources: (
+          topic: string,
+          englishTopic: string,
+          validatedSources: Array<{ title: string; url: string; snippet: string }>,
+        ) => Array<{ title: string; url: string; snippet: string }>;
+      }
+    ).selectRelevantSources("electric vehicles", "electric vehicles", [
+      {
+        title: "Tesla electric vehicles market expansion",
+        url: "https://tesla.com/ev",
+        snippet: "Tesla electric vehicles market expansion.",
+      },
+      {
+        title: "Reuters electric vehicles market report",
+        url: "https://reuters.com/ev",
+        snippet: "Reuters electric vehicles market report.",
+      },
+      {
+        title: "Bloomberg electric vehicles market sales",
+        url: "https://bloomberg.com/ev",
+        snippet: "Bloomberg electric vehicles market sales.",
+      },
+      {
+        title: "BYD electric vehicles market share",
+        url: "https://byd.com/ev",
+        snippet: "BYD electric vehicles market share.",
+      },
+      {
+        title: "Statista electric vehicles market size",
+        url: "https://www.statista.com/ev",
+        snippet: "Statista electric vehicles market size.",
+      },
+      {
+        title: "MarketsAndMarkets electric vehicles market forecast",
+        url: "https://www.marketsandmarkets.com/ev",
+        snippet: "MarketsAndMarkets electric vehicles market forecast.",
+      },
+    ]);
+
+    const selectedUrls = selected.map((source) => source.url);
+    expect(selectedUrls).not.toContain("https://www.statista.com/ev");
+    expect(selectedUrls).not.toContain("https://www.marketsandmarkets.com/ev");
+    expect(selected).toHaveLength(4);
+  });
+
+  it("instructs the analyst never to output a website or aggregator as a company", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = {
+      generate: vi.fn().mockResolvedValue({
+        trend_name: "AI coding assistants",
+        global_market: marketNotFound,
+        ru_market: ruMarketNotFound,
+      }),
+    };
+    const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
+
+    await (graph as unknown as AnalyzeOnlyGraph).analyze({
+      topic: "AI coding assistants",
+      validatedSources: [
+        {
+          title: "GitHub Copilot momentum",
+          url: "https://example.com/copilot",
+          snippet: "Global usage continues to grow.",
+        },
+      ],
+    });
+
+    expect(provider.generate).toHaveBeenCalledWith(
+      expect.stringContaining("never the website, publisher, or research firm itself"),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("sends truncated raw page content to the analyst instead of the full text", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = {
+      generate: vi.fn().mockResolvedValue({
+        trend_name: "AI coding assistants",
+        global_market: marketNotFound,
+        ru_market: ruMarketNotFound,
+      }),
+    };
+    const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
+    const longRaw = `GitHub Copilot ${"x".repeat(5_000)}`;
+
+    await (graph as unknown as AnalyzeOnlyGraph).analyze({
+      topic: "AI coding assistants",
+      validatedSources: [
+        {
+          title: "GitHub Copilot momentum",
+          url: "https://example.com/copilot",
+          snippet: "Global usage continues to grow.",
+          rawContent: longRaw,
+        } as never,
+      ],
+    });
+
+    const prompt = provider.generate.mock.calls[0][0] as string;
+    expect(prompt).toContain("GitHub Copilot");
+    expect(prompt).not.toContain(longRaw);
+  });
+
+  it("splits a multi-company field into one clean item per company", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = {
+      generate: vi.fn().mockResolvedValue({
+        trend_name: "robotics",
+        global_market: [
+          {
+            product: "Industrial robots",
+            company: "ABB, FANUC and KUKA (industrial leaders)",
+            effects: "Widely deployed on assembly lines",
+            sources: ["https://example.com/robotics"],
+          },
+        ],
+        ru_market: [],
+      }),
+    };
+    const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
+
+    const result = await (graph as unknown as AnalyzeOnlyGraph).analyze({
+      topic: "robotics",
+      validatedSources: [
+        {
+          title: "Top robotics companies",
+          url: "https://example.com/robotics",
+          snippet: "Robotics companies overview.",
+        },
+      ],
+    });
+
+    const global = result.analysis.global_market as Array<{ company: string }>;
+    expect(global.map((i) => i.company)).toEqual(["ABB", "FANUC", "KUKA"]);
+  });
+
+  it("drops a company that is a bare domain and resolves a source cited by title", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = {
+      generate: vi.fn().mockResolvedValue({
+        trend_name: "electric vehicles",
+        global_market: [
+          {
+            product: "Catalog",
+            company: "Rucars.ru",
+            effects: "Lists many brands",
+            sources: ["https://example.com/cars"],
+          },
+          {
+            product: "Model 3",
+            company: "Tesla",
+            effects: "Mass-market EV",
+            sources: ["Top 10 electric vehicle companies | TechMag"],
+          },
+        ],
+        ru_market: [],
+      }),
+    };
+    const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
+
+    const result = await (graph as unknown as AnalyzeOnlyGraph).analyze({
+      topic: "electric vehicles",
+      validatedSources: [
+        {
+          title: "Top 10 electric vehicle companies | TechMag",
+          url: "https://techmag.com/ev",
+          snippet: "Leading electric vehicles companies.",
+        },
+        {
+          title: "Car catalog",
+          url: "https://example.com/cars",
+          snippet: "Electric vehicles catalog.",
+        },
+      ],
+    });
+
+    expect(result.analysis.global_market).toEqual([
+      {
+        product: "Model 3",
+        company: "Tesla",
+        effects: "Mass-market EV",
+        sources: ["https://techmag.com/ev"],
+      },
+    ]);
+  });
+
+  it("keeps a company in global out of ru_market (cross-market dedup)", async () => {
+    const { ReportGenerationGraph } = await import("./report-generation.graph");
+    const provider = {
+      generate: vi.fn().mockResolvedValue({
+        trend_name: "wearables",
+        global_market: [
+          {
+            product: "Watch GT",
+            company: "Huawei",
+            effects: "Global smartwatch sales",
+            sources: ["https://example.com/wearables"],
+          },
+        ],
+        ru_market: [
+          {
+            product: "Watch GT",
+            company: "Huawei",
+            effects: "Sold in Russia too",
+            sources: ["https://example.com/wearables"],
+          },
+          {
+            product: "Smart band",
+            company: "Yandex",
+            effects: "Russian wearable",
+            sources: ["https://example.com/wearables"],
+          },
+        ],
+      }),
+    };
+    const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
+
+    const result = await (graph as unknown as AnalyzeOnlyGraph).analyze({
+      topic: "wearables",
+      validatedSources: [
+        {
+          title: "Top wearables companies",
+          url: "https://example.com/wearables",
+          snippet: "Wearables companies overview.",
+        },
+      ],
+    });
+
+    const global = result.analysis.global_market as Array<{ company: string }>;
+    const ru = result.analysis.ru_market as Array<{ company: string }>;
+    expect(global.map((i) => i.company)).toEqual(["Huawei"]);
+    expect(ru.map((i) => i.company)).toEqual(["Yandex"]);
   });
 });
