@@ -102,8 +102,8 @@ describe("Dashboard states", () => {
 
     render(<Dashboard reportId={null} />);
 
-    expect(screen.getByText("Loading reports...")).toBeInTheDocument();
-    expect(screen.getByText("0 reports")).toBeInTheDocument();
+    expect(screen.getByText("Загрузка отчётов...")).toBeInTheDocument();
+    expect(screen.getByText("0 отчётов")).toBeInTheDocument();
   });
 
   it("shows the error copy when the reports query fails", () => {
@@ -111,7 +111,7 @@ describe("Dashboard states", () => {
 
     render(<Dashboard reportId={null} />);
 
-    expect(screen.getByText("Failed to load reports.")).toBeInTheDocument();
+    expect(screen.getByText("Не удалось загрузить отчёты.")).toBeInTheDocument();
   });
 
   it("shows the empty-history copy when there are no reports", () => {
@@ -119,7 +119,7 @@ describe("Dashboard states", () => {
 
     render(<Dashboard reportId={null} />);
 
-    expect(screen.getByText("No reports yet. Submit your first topic.")).toBeInTheDocument();
+    expect(screen.getByText("Отчётов пока нет. Отправьте первую тему.")).toBeInTheDocument();
   });
 
   it("shows the no-selection copy when no report is selected", () => {
@@ -128,9 +128,9 @@ describe("Dashboard states", () => {
 
     render(<Dashboard reportId={null} />);
 
-    expect(screen.getByText("Select a report from history.")).toBeInTheDocument();
-    expect(screen.getByText("No report selected yet.")).toBeInTheDocument();
-    expect(screen.getByText("Latest report")).toBeInTheDocument();
+    expect(screen.getByText("Выберите отчёт из истории.")).toBeInTheDocument();
+    expect(screen.getByText("Отчёт пока не выбран.")).toBeInTheDocument();
+    expect(screen.getByText("Последний отчёт")).toBeInTheDocument();
   });
 
   it("auto-selects the first report when none is requested", () => {
@@ -167,7 +167,7 @@ describe("Dashboard states", () => {
     render(<Dashboard reportId={erroredReport.id} />);
 
     expect(screen.getByText("Research pipeline crashed on source validation.")).toBeInTheDocument();
-    expect(screen.getByText("Status: error (Ошибка)")).toBeInTheDocument();
+    expect(screen.getByText("Статус: error (Ошибка)")).toBeInTheDocument();
     expect(screen.getAllByText("Ошибка").length).toBeGreaterThan(0);
   });
 
@@ -184,7 +184,7 @@ describe("Dashboard states", () => {
     render(<Dashboard reportId={erroredReport.id} />);
 
     expect(
-      screen.getByText("Report generation failed. Try a different topic."),
+      screen.getByText("Не удалось сгенерировать отчёт. Попробуйте другую тему."),
     ).toBeInTheDocument();
   });
 
@@ -206,7 +206,7 @@ describe("Dashboard states", () => {
 
     render(<Dashboard reportId={baseReport.id} />);
 
-    expect(screen.getByText("Status: done (Готово)")).toBeInTheDocument();
+    expect(screen.getByText("Статус: done (Готово)")).toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 

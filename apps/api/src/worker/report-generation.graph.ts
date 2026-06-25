@@ -40,15 +40,14 @@ const analysisSchema = z.object({
 const llmMarketItemSchema = z.object({
   product: z.string(),
   company: z.string(),
-  effects: z.string(),
-  sources: z.array(z.string()),
+  effects: z.string().optional().default(""),
+  sources: z.array(z.string()).optional().default([]),
 });
-const llmAnalysisSchema = z.object({
-  trend_name: z.string(),
-  global_market: z.array(llmMarketItemSchema),
-  ru_market: z.array(llmMarketItemSchema),
+const llmMarketSectionSchema = z.object({
+  items: z.array(llmMarketItemSchema),
 });
 type LlmMarketItem = z.infer<typeof llmMarketItemSchema>;
+type LlmMarketSection = z.output<typeof llmMarketSectionSchema>;
 
 // Used to translate a non-English (e.g. Russian) topic into an English search
 // term so the GLOBAL-market search hits the rich English-language web, which the
@@ -168,6 +167,7 @@ export class ReportGenerationGraph {
           const ruMarket = state.analysis.ru_market;
           const isRuNotFound = ruMarket === ruMarketNotFound || ruMarket === marketNotFound;
           const scorerInput: SustainabilityScorerInput = {
+            topic: state.topic,
             globalMarket: Array.isArray(state.analysis.global_market)
               ? state.analysis.global_market
               : [],
@@ -306,12 +306,24 @@ export class ReportGenerationGraph {
    * contract, leaving sustainability scoring to the dedicated downstream node.
    */
   private async analyze(state: GraphState): Promise<Pick<GraphState, "analysis">> {
-    const relevantSources = this.selectRelevantSources(
+    const globalSources = this.selectRelevantSourcesForMarket(
       state.topic,
       state.englishTopic,
       state.validatedSources,
+      "global",
     );
-    const analysis = await this.ollamaProvider.generate(
+    const ruSources = this.selectRelevantSourcesForMarket(
+      state.topic,
+      state.englishTopic,
+      state.validatedSources,
+      "ru",
+    );
+    const [globalSection, ruSection] = await Promise.all([
+      this.analyzeMarketSection("global", state.guardedTopic, globalSources),
+      this.analyzeMarketSection("ru", state.guardedTopic, ruSources),
+    ]);
+    /*
+    const analysis = (await this.ollamaProvider.generate(
       [
         "Analyst",
         "From the sources below, extract the real product or vendor COMPANIES named in the page text.",
@@ -329,14 +341,13 @@ export class ReportGenerationGraph {
       ].join("\n"),
       llmAnalysisSchema,
       { timeoutMs: this.nodeTimeoutMs("analyst") },
-    );
+    )) as LlmAnalysis;
+    */
 
-    const globalItems = this.cleanLlmMarket(analysis.global_market, relevantSources);
-    // A company that also appears in global is clearly not Russia-specific — small models
-    // dump foreign brands into ru_market off Russia-context listicles, so drop the overlap.
-    const globalKeys = new Set(globalItems.map((item) => this.normalizeCompanyKey(item.company)));
-    const ruItems = this.cleanLlmMarket(analysis.ru_market, relevantSources).filter(
-      (item) => !globalKeys.has(this.normalizeCompanyKey(item.company)),
+    const { globalItems, ruItems } = this.reconcileMarketItems(
+      this.cleanLlmMarket(globalSection.items, globalSources),
+      this.cleanLlmMarket(ruSection.items, ruSources),
+      [...globalSources, ...ruSources],
     );
 
     return {
@@ -347,6 +358,38 @@ export class ReportGenerationGraph {
           ruItems.length > 0 ? ruItems : globalItems.length > 0 ? ruMarketNotFound : marketNotFound,
       },
     };
+  }
+
+  private async analyzeMarketSection(
+    market: "global" | "ru",
+    guardedTopic: string,
+    relevantSources: readonly TavilySourceCandidate[],
+  ): Promise<LlmMarketSection> {
+    const marketInstruction =
+      market === "global"
+        ? "Extract ONLY non-Russian companies. Exclude Russian companies even if the source mentions them."
+        : "Extract ONLY Russian companies. Exclude foreign companies even if they are active in Russia.";
+
+    return (await this.ollamaProvider.generate(
+      [
+        "Analyst",
+        "From the sources below, extract the real product or vendor COMPANIES named in the page text.",
+        "Output ONE company per item. If a page lists several companies, create a SEPARATE item for each company.",
+        "If a page is a ranking, a 'top companies' article, or a market report, output the companies it names вЂ” never the website, publisher, or research firm itself.",
+        'company = the organization name ONLY (e.g. "Tesla", "Fanuc", "Vishay") вЂ” no country, no parenthetical, no description, no domain or URL.',
+        "product = that company's OWN concrete product or offering for this topic (never a competitor's product or another company's name).",
+        "effects = a concrete fact about it (adoption, market share, capability, sales, launch, production, deliveries, deployment, numbers).",
+        marketInstruction,
+        "List as many real companies as the sources support; never invent companies that are not in the sources.",
+        "In sources, copy the exact url of the source you used for that company.",
+        "Write every text value in the same language as the user topic (Russian topic в†’ Russian text); keep company and product proper nouns unchanged.",
+        "Return JSON: { items: ReportMarketItem[] }.",
+        guardedTopic,
+        `Sources: ${JSON.stringify(this.buildAnalystSources(relevantSources))}`,
+      ].join("\n"),
+      llmMarketSectionSchema,
+      { timeoutMs: this.nodeTimeoutMs("analyst") },
+    )) as LlmMarketSection;
   }
 
   /**
@@ -365,12 +408,15 @@ export class ReportGenerationGraph {
     const cleaned: ReportMarketItem[] = [];
     for (const item of items) {
       const product = item.product.trim();
-      const effects = item.effects.trim();
-      if (!product || !effects) {
+      if (!product) {
         continue;
       }
-      const sources = this.resolveItemSources(item.sources, fedSources);
+      const sources = this.resolveItemSources(item, fedSources);
       if (sources.length === 0) {
+        continue;
+      }
+      const effects = item.effects.trim() || this.inferItemEffects(item, sources, fedSources);
+      if (!effects) {
         continue;
       }
       // The model sometimes packs several companies into one field; split into one
@@ -402,17 +448,14 @@ export class ReportGenerationGraph {
    * normalized url, then by normalized title, then fuzzily. If nothing resolves, attribute
    * to the fed source set (all validated + topic-relevant) so a real company is not lost.
    */
-  private resolveItemSources(
-    rawSources: readonly string[],
-    fedSources: readonly TavilySourceCandidate[],
-  ): string[] {
+  private resolveItemSources(item: LlmMarketItem, fedSources: readonly TavilySourceCandidate[]): string[] {
     const byUrl = new Map(fedSources.map((s) => [this.normalizeUrl(s.url), s.url]));
     const byTitle = new Map(
       fedSources.map((s) => [this.normalizeTitleKey(s.title), s.url] as const).filter(([k]) => k),
     );
     const resolved = new Set<string>();
 
-    for (const raw of rawSources ?? []) {
+    for (const raw of item.sources ?? []) {
       const text = String(raw).trim();
       if (!text) {
         continue;
@@ -437,9 +480,65 @@ export class ReportGenerationGraph {
       }
     }
 
+    if (resolved.size === 0 && (item.sources?.length ?? 0) === 0) {
+      for (const inferredUrl of this.inferItemSourcesFromEvidence(item, fedSources)) {
+        resolved.add(inferredUrl);
+      }
+    }
+
     // No best-effort fallback: an item we can't ground in a fed source is dropped, so a
     // hallucinated company with a bogus citation never inherits a real URL.
     return [...resolved];
+  }
+
+  private inferItemSourcesFromEvidence(
+    item: Pick<LlmMarketItem, "company" | "product" | "effects">,
+    fedSources: readonly TavilySourceCandidate[],
+  ): string[] {
+    return this.matchEvidenceSources(item, fedSources).map((source) => source.url);
+  }
+
+  private inferItemEffects(
+    item: Pick<LlmMarketItem, "company" | "product" | "effects">,
+    resolvedSources: readonly string[],
+    fedSources: readonly TavilySourceCandidate[],
+  ): string {
+    const primarySources = fedSources.filter((source) => resolvedSources.includes(source.url));
+    const fallbackSources =
+      primarySources.length > 0 ? primarySources : this.matchEvidenceSources(item, fedSources);
+
+    for (const source of fallbackSources) {
+      const effect = source.snippet?.trim() || source.rawContent?.trim() || source.title.trim();
+      if (effect) {
+        return effect;
+      }
+    }
+
+    return "";
+  }
+
+  private matchEvidenceSources(
+    item: Pick<LlmMarketItem, "company" | "product" | "effects">,
+    fedSources: readonly TavilySourceCandidate[],
+  ): TavilySourceCandidate[] {
+    const hints = [item.company, item.product]
+      .map((value) => this.normalizeEvidenceText(value))
+      .filter((value) => value.length >= 3);
+
+    if (hints.length === 0) {
+      return [];
+    }
+
+    return fedSources.filter((source) => {
+      const haystack = this.normalizeEvidenceText(
+        [source.title, source.snippet, source.rawContent, source.url].filter(Boolean).join(" "),
+      );
+      return hints.some((hint) => haystack.includes(hint));
+    });
+  }
+
+  private normalizeEvidenceText(value: string): string {
+    return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   }
 
   private normalizeTitleKey(value: string): string {
@@ -459,6 +558,62 @@ export class ReportGenerationGraph {
       }
     }
     return [...byCompany.values()];
+  }
+
+  private reconcileMarketItems(
+    globalItems: readonly ReportMarketItem[],
+    ruItems: readonly ReportMarketItem[],
+    fedSources: readonly TavilySourceCandidate[],
+  ): { globalItems: ReportMarketItem[]; ruItems: ReportMarketItem[] } {
+    const globalByCompany = new Map(
+      globalItems.map((item) => [this.normalizeCompanyKey(item.company), item] as const),
+    );
+    const ruByCompany = new Map(
+      ruItems.map((item) => [this.normalizeCompanyKey(item.company), item] as const),
+    );
+
+    for (const [key, ruItem] of ruByCompany) {
+      if (!globalByCompany.has(key)) {
+        continue;
+      }
+
+      if (this.isLikelyRussianCompany(ruItem, fedSources)) {
+        globalByCompany.delete(key);
+      } else {
+        ruByCompany.delete(key);
+      }
+    }
+
+    return {
+      globalItems: [...globalByCompany.values()],
+      ruItems: [...ruByCompany.values()],
+    };
+  }
+
+  private isLikelyRussianCompany(
+    item: Pick<ReportMarketItem, "company" | "product" | "effects" | "sources">,
+    fedSources: readonly TavilySourceCandidate[],
+  ): boolean {
+    if (/[А-Яа-яЁё]/u.test(item.company)) {
+      return true;
+    }
+
+    const itemSources = fedSources.filter((source) => item.sources.includes(source.url));
+    if (itemSources.length === 0) {
+      return false;
+    }
+
+    const evidence = itemSources
+      .map((source) => [source.title, source.snippet, source.rawContent, source.url].join(" "))
+      .join(" ");
+    const normalizedEvidence = this.normalizeEvidenceText(evidence);
+
+    return (
+      itemSources.some((source) => this.isRussiaSource(source)) &&
+      /россий|отечествен|локальн|в россии|из россии|москвич|автоваз|эволют|evolute/u.test(
+        normalizedEvidence,
+      )
+    );
   }
 
   private buildDeterministicAnalysisFallback(
@@ -666,34 +821,44 @@ export class ReportGenerationGraph {
     englishTopic: string,
     validatedSources: readonly TavilySourceCandidate[],
   ): TavilySourceCandidate[] {
-    // Match on tokens from BOTH the original topic and its English term, otherwise
-    // English global sources (which never contain the Russian word) get filtered out.
+    return [
+      ...this.selectRelevantSourcesForMarket(topic, englishTopic, validatedSources, "global"),
+      ...this.selectRelevantSourcesForMarket(topic, englishTopic, validatedSources, "ru"),
+    ];
+  }
+
+  private selectRelevantSourcesForMarket(
+    topic: string,
+    englishTopic: string,
+    validatedSources: readonly TavilySourceCandidate[],
+    market: "global" | "ru",
+  ): TavilySourceCandidate[] {
     const combinedTopic = `${topic} ${englishTopic ?? topic}`;
     const topicTokens = this.extractTopicTokens(combinedTopic);
+    const marketScopedSources = validatedSources.filter((source) =>
+      market === "ru" ? this.isRussiaSource(source) : !this.isRussiaSource(source),
+    );
+    const sourcesToSearch = marketScopedSources.length > 0 ? marketScopedSources : [...validatedSources];
 
-    if (topicTokens.length === 0) {
-      return [...validatedSources];
-    }
+    const relevantSources =
+      topicTokens.length === 0
+        ? sourcesToSearch
+        : sourcesToSearch.filter((source) => {
+            const haystack = `${source.title} ${source.snippet} ${source.url}`.toLowerCase();
+            return topicTokens.some((token) => haystack.includes(token));
+          });
 
-    const relevantSources = validatedSources.filter((source) => {
-      const haystack = `${source.title} ${source.snippet} ${source.url}`.toLowerCase();
-      return topicTokens.some((token) => haystack.includes(token));
-    });
-
-    const topicScopedSources = relevantSources.length > 0 ? relevantSources : [...validatedSources];
+    const topicScopedSources = relevantSources.length > 0 ? relevantSources : sourcesToSearch;
     const rankedSources = topicScopedSources
       .map((source) => ({
         source,
-        score: this.scoreSourceRelevance(combinedTopic, source),
+        score: this.scoreSourceRelevance(combinedTopic, source, market),
       }))
       .filter((entry) => entry.score > 0)
       .sort((left, right) => right.score - left.score)
       .map((entry) => entry.source);
-    const finalSources = rankedSources.length > 0 ? rankedSources : topicScopedSources;
-    const globalSources = finalSources.filter((source) => !this.isRussiaSource(source)).slice(0, 4);
-    const ruSources = finalSources.filter((source) => this.isRussiaSource(source)).slice(0, 4);
 
-    return [...globalSources, ...ruSources];
+    return (rankedSources.length > 0 ? rankedSources : topicScopedSources).slice(0, 4);
   }
 
   private extractTopicTokens(topic: string): string[] {
@@ -707,10 +872,20 @@ export class ReportGenerationGraph {
     ];
   }
 
-  private scoreSourceRelevance(topic: string, source: TavilySourceCandidate): number {
+  private scoreSourceRelevance(
+    topic: string,
+    source: TavilySourceCandidate,
+    market: "global" | "ru",
+  ): number {
     const haystack = `${source.title} ${source.snippet} ${source.url}`.toLowerCase();
     const topicTokens = this.extractTopicTokens(topic);
     let score = topicTokens.reduce((total, token) => total + (haystack.includes(token) ? 3 : 0), 0);
+
+    if (market === "ru" && this.isRussiaSource(source)) {
+      score += 4;
+    } else if (market === "global" && !this.isRussiaSource(source)) {
+      score += 2;
+    }
 
     // Reward pages that enumerate or belong to real companies — listicles, vendor
     // sites, news, startup lists. These are what the analyst can extract names from.

@@ -116,10 +116,10 @@ describe("Dashboard", () => {
 
     expect(screen.getByText("TrendScout")).toBeInTheDocument();
     expect(screen.getAllByText("AI coding assistants")).toHaveLength(3);
-    expect(screen.getByText("Sustainability score")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /generate report/i })).toBeInTheDocument();
+    expect(screen.getByText("Оценка устойчивости")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /сгенерировать отчёт/i })).toBeInTheDocument();
     expect(screen.getAllByText("Готово").length).toBeGreaterThan(0);
-    expect(screen.getByText("Status: done (Готово)")).toBeInTheDocument();
+    expect(screen.getByText("Статус: done (Готово)")).toBeInTheDocument();
     expect(mockUseReportRealtime).toHaveBeenCalledWith(
       expect.objectContaining({
         reportId: "550e8400-e29b-41d4-a716-446655440000",
@@ -130,11 +130,11 @@ describe("Dashboard", () => {
   it("renders the structured report view with clickable source links and honest empty states", () => {
     render(<Dashboard reportId="550e8400-e29b-41d4-a716-446655440000" />);
 
-    expect(screen.getByText("Trend")).toBeInTheDocument();
-    expect(screen.getByText("Global market")).toBeInTheDocument();
-    expect(screen.getByText("RU market")).toBeInTheDocument();
-    expect(screen.getByText("Arguments for")).toBeInTheDocument();
-    expect(screen.getByText("Arguments against")).toBeInTheDocument();
+    expect(screen.getByText("Тренд")).toBeInTheDocument();
+    expect(screen.getByText("Глобальный рынок")).toBeInTheDocument();
+    expect(screen.getByText("Рынок РФ")).toBeInTheDocument();
+    expect(screen.getByText("Аргументы за")).toBeInTheDocument();
+    expect(screen.getByText("Аргументы против")).toBeInTheDocument();
     expect(screen.getByText("Cursor")).toBeInTheDocument();
     expect(screen.getByText("Anysphere")).toBeInTheDocument();
     expect(
@@ -168,9 +168,9 @@ describe("Dashboard", () => {
     render(<Dashboard reportId="550e8400-e29b-41d4-a716-446655440000" />);
 
     expect(screen.getAllByText("В очереди").length).toBeGreaterThan(0);
-    expect(screen.getByText("Status: queued (В очереди)")).toBeInTheDocument();
+    expect(screen.getByText("Статус: queued (В очереди)")).toBeInTheDocument();
     expect(
-      screen.getByText("Report is queued for research. Live status updates will appear here."),
+      screen.getByText("Отчёт поставлен в очередь на исследование. Живые обновления статуса появятся здесь."),
     ).toBeInTheDocument();
   });
 

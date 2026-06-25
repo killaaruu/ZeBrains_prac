@@ -2,10 +2,13 @@
 
 Short pre-demo checklist for showing the customer. Full detail: `docs/deployment.md`.
 
-1. **Ollama is running** with both pool models pulled:
-   ```bash
-   ollama list   # expect qwen2.5:7b and gemma4:12b-it-qat
-   ```
+1. **LLM backend is ready**:
+   - **Local Ollama**:
+     ```bash
+     ollama list   # expect qwen2.5:7b and gemma4:12b-it-qat
+     ```
+   - **or remote API**:
+     confirm `.demo.env` has `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`.
 2. **Bring the stack up:**
    ```bash
    make demo
@@ -41,7 +44,7 @@ during the demo to show what's under the hood:
 Good moment to open **Bull Board** (`/queues`) while a report is still
 `thinking` — the customer sees the job being processed live. The report itself
 (trend → global/RU market → sustainability score → cited sources) demonstrates
-the Ollama (local GPU LLM) + Tavily (web search) + LangGraph pipeline.
+the LLM provider + Tavily (web search) + LangGraph pipeline.
 
 > Note: the **Settings** pages are template demo forms (no backend persistence);
 > the **Example CRUD** vertical is hidden from the production sidebar.

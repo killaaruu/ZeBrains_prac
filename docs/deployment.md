@@ -1,9 +1,14 @@
 # Deployment
 
 TrendScout does **not** run the API in a cloud cluster. The API and the report
-worker run **locally on a GPU machine** because they need a local Ollama for LLM
-inference. The web frontend lives on Vercel and reaches the local API through a
-**stable ngrok domain**.
+worker run **locally on a GPU machine**. The web frontend lives on Vercel and
+reaches the local API through a **stable ngrok domain**.
+
+The report worker supports two LLM backends behind the same OpenAI-compatible
+client:
+
+- **Local Ollama** on the demo GPU host.
+- **Remote OpenAI-compatible APIs** such as `302.ai`.
 
 ## Architecture
 
@@ -52,13 +57,14 @@ inference. The web frontend lives on Vercel and reaches the local API through a
 
 - **Docker** (for the demo Postgres + Redis containers)
 - **Node.js 24 LTS** and **pnpm** (`pnpm install` at the repo root)
-- **Ollama** running locally with the pool models pulled:
-  - `qwen2.5:7b` (primary)
-  - `gemma4:12b-it-qat` (fallback)
-  ```bash
-  ollama pull qwen2.5:7b
-  ollama pull gemma4:12b-it-qat
-  ```
+- **One LLM backend configured**:
+  - **Local Ollama**:
+    ```bash
+    ollama pull qwen2.5:7b
+    ollama pull gemma4:12b-it-qat
+    ```
+  - **or remote OpenAI-compatible API**:
+    set `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` for that provider.
 - **ngrok** installed, with the authtoken configured once:
   ```bash
   ngrok config add-authtoken <token>
@@ -108,6 +114,28 @@ curl https://your-app.ngrok-free.dev/health
 
 It should return JSON (not the ngrok interstitial HTML — the web client sends the
 skip header automatically; see Troubleshooting).
+
+## LLM backend selection
+
+The worker always reads the same env vars:
+
+- `LLM_BASE_URL`
+- `LLM_API_KEY`
+- `LLM_MODEL`
+
+Use them like this:
+
+| Mode | `LLM_BASE_URL` | `LLM_API_KEY` | `LLM_MODEL` |
+|---|---|---|---|
+| Local Ollama | `http://127.0.0.1:11434/v1` | empty | `qwen2.5:7b,gemma4:12b-it-qat` |
+| Remote API | provider URL, e.g. `https://api.302.ai/v1` | provider key | provider model pool, e.g. `gpt-4o-mini` |
+
+Notes:
+
+- The provider is OpenAI-compatible, so Ollama must expose the `/v1` shim.
+- `LLM_MODEL` accepts a comma-separated fallback pool in both modes.
+- On the 6 GB demo laptop, the recommended local pool is
+  `qwen2.5:7b,gemma4:12b-it-qat`.
 
 ## Deploy the web app
 
