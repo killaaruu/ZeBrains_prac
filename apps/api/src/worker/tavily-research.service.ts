@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { z } from "zod";
+import { AGGREGATOR_DOMAINS } from "./aggregators";
 
 const TAVILY_BASE_URL = "https://api.tavily.com";
 const TAVILY_SEARCH_PATH = "/search";
@@ -12,6 +13,7 @@ const tavilyResultSchema = z.object({
   title: z.string().trim().min(1),
   url: z.string().trim().min(1),
   content: z.string().trim().min(1),
+  raw_content: z.string().trim().min(1).nullable().optional(),
 });
 
 const tavilySearchResponseSchema = z.object({
@@ -22,6 +24,9 @@ export type TavilySourceCandidate = {
   title: string;
   url: string;
   snippet: string;
+  // Full page text (when Tavily can extract it) — lets the weak local analyst name
+  // the real companies mentioned inside a page instead of falling back to the domain.
+  rawContent?: string;
 };
 
 @Injectable()
@@ -73,8 +78,11 @@ export class TavilyResearchService {
         api_key: apiKey,
         query,
         search_depth: "advanced",
-        include_raw_content: false,
+        include_raw_content: true,
         max_results: TAVILY_MAX_RESULTS,
+        // Keep market-research mills out of the result set so vendor / news / listicle
+        // pages — the ones that actually name real companies — take the slots instead.
+        exclude_domains: AGGREGATOR_DOMAINS,
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -90,6 +98,7 @@ export class TavilyResearchService {
       title: result.title,
       url: result.url,
       snippet: result.content,
+      rawContent: result.raw_content ?? undefined,
     }));
   }
 
