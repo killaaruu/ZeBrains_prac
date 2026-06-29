@@ -181,5 +181,5 @@ Released under the [MIT License](LICENSE).
 - **Branding:** `apps/web/index.html` (title), `apps/web/src/shared/assets/logo.tsx` (logo), `apps/web/src/globals.css` (`--brand` color tokens + theme), `sidebar-data.ts` (team name + nav).
 - **Auth:** Supabase by default (`apps/web/src/shared/lib/supabase.ts`, `apps/api/src/auth/`). The `local-dev-auth-service` bypass is for local only.
 - **Error reporting / tracing:** none wired by default. Add Sentry/Rollbar in `apps/api/src/common/filters/http-exception.filter.ts` and OpenTelemetry/Langfuse where you need it.
-- **Queues:** the `example` BullMQ queue + Bull Board dashboard (`/queues`) in `apps/api/src/queue/` is a working reference.
+- **Queues:** the report-generation BullMQ queue is wired in `apps/api/src/queue/`, and Bull Board stays available at `/queues`.
 - **Conventions:** `CLAUDE.md` (root + per-package) encodes the engineering rules; `AGENTS.md` holds agent-facing instructions (including the deploy runbook). Agent skills live in `.agents/skills` and `.claude/skills`.
