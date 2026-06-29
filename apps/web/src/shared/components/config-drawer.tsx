@@ -25,6 +25,7 @@ import {
 import { useSidebar } from "@/shared/ui/sidebar";
 
 export function ConfigDrawer() {
+  const descriptionId = "config-drawer-description";
   const { setOpen } = useSidebar();
   const { resetDir } = useDirection();
   const { resetTheme } = useTheme();
@@ -44,16 +45,16 @@ export function ConfigDrawer() {
           size="icon"
           variant="ghost"
           aria-label="Open theme settings"
-          aria-describedby="config-drawer-description"
+          aria-describedby={descriptionId}
           className="rounded-full"
         >
           <Settings aria-hidden="true" />
         </Button>
       </SheetTrigger>
-      <SheetContent className="flex flex-col">
+      <SheetContent className="flex flex-col" aria-describedby={descriptionId}>
         <SheetHeader className="pb-0 text-start">
           <SheetTitle>Настройки темы</SheetTitle>
-          <SheetDescription id="config-drawer-description">
+          <SheetDescription id={descriptionId}>
             Настройте внешний вид и расположение элементов по своему вкусу.
           </SheetDescription>
         </SheetHeader>
