@@ -88,3 +88,5 @@ cors-patch.js
 patch-cors.js
 patch-cors.sh
 test-ollama*.sh
+docs/practice-report-guide.md
+apps/api/test-302ai.mjs

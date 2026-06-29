@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as queueConstants from "./queue.constants";
 import {
   GENERATE_REPORT_JOB,
   type GenerateReportJobPayload,
@@ -23,5 +24,9 @@ describe("report generation queue contract", () => {
       userId: "11111111-1111-4111-8111-111111111111",
       topic: "AI coding assistants",
     });
+  });
+
+  it("does not expose the template example queue anymore", () => {
+    expect(queueConstants).not.toHaveProperty("EXAMPLE_QUEUE");
   });
 });

@@ -21,15 +21,15 @@ const hiddenInProd = new Set<string>(["Example CRUD"]);
 
 const rawSidebarData: SidebarData = {
   user: {
-    name: "User",
-    email: "user@example.com",
+    name: "TrendScout Demo",
+    email: "demo@trendscout.app",
     avatar: "/avatars/placeholder.png",
   },
   teams: [
     {
-      name: "Acme Inc",
+      name: "TrendScout",
       logo: Logo,
-      plan: "Product Template",
+      plan: "Research Workspace",
     },
   ],
   navGroups: [

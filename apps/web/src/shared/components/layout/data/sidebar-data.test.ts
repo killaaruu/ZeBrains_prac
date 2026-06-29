@@ -21,4 +21,23 @@ describe("sidebarData", () => {
     const productionSidebarData = getSidebarData(true);
     expect(productionSidebarData.navGroups.length).toBeGreaterThan(0);
   });
+
+  it("keeps template example navigation out of production user surfaces", () => {
+    const productionSidebarData = getSidebarData(true);
+    const productionTitles = productionSidebarData.navGroups.flatMap((group) =>
+      group.items.map((item) => item.title),
+    );
+
+    expect(productionTitles).not.toContain("Example CRUD");
+  });
+
+  it("uses TrendScout product metadata instead of template placeholders", () => {
+    expect(sidebarData.user.email).toBe("demo@trendscout.app");
+    expect(sidebarData.teams).toEqual([
+      expect.objectContaining({
+        name: "TrendScout",
+        plan: "Research Workspace",
+      }),
+    ]);
+  });
 });

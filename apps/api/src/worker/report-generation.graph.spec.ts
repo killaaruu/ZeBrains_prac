@@ -49,6 +49,12 @@ const generatedRuSection = {
   items: generatedAnalysis.ru_market,
 };
 
+function marketSection(
+  items: Array<{ product: string; company: string; effects?: string; sources?: string[] }>,
+) {
+  return { items };
+}
+
 const generatedSustainability = {
   score: 1,
   arguments_for: ["Validated findings still show concrete adoption for GitHub."],
@@ -405,31 +411,34 @@ describe("ReportGenerationGraph", () => {
   it("drops analyst items whose sources are not in the validated evidence and falls back honestly", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = {
-      generate: vi.fn().mockResolvedValue({
-        trend_name: "AI coding assistants",
-        global_market: [
-          {
-            product: "Copilot",
-            company: "GitHub",
-            effects: "Developer productivity gains",
-            sources: ["https://example.com/copilot", "https://example.com/invented"],
-          },
-          {
-            product: "Phantom AI",
-            company: "Imaginary Labs",
-            effects: "Unverified growth",
-            sources: ["https://example.com/phantom"],
-          },
-        ],
-        ru_market: [
-          {
-            product: "Local AI",
-            company: "Unknown",
-            effects: "No verified implementation",
-            sources: ["https://example.com/phantom-ru"],
-          },
-        ],
-      }),
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce(
+          marketSection([
+            {
+              product: "Copilot",
+              company: "GitHub",
+              effects: "Developer productivity gains",
+              sources: ["https://example.com/copilot", "https://example.com/invented"],
+            },
+            {
+              product: "Phantom AI",
+              company: "Imaginary Labs",
+              effects: "Unverified growth",
+              sources: ["https://example.com/phantom"],
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(
+          marketSection([
+            {
+              product: "Local AI",
+              company: "Unknown",
+              effects: "No verified implementation",
+              sources: ["https://example.com/phantom-ru"],
+            },
+          ]),
+        ),
     };
     const tavilyResearchService = { search: vi.fn() };
     const graph = new ReportGenerationGraph(provider as never, tavilyResearchService as never);
@@ -491,17 +500,18 @@ describe("ReportGenerationGraph", () => {
   it("rescues analyst items when the model omits sources but the evidence text names the company", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = {
-      generate: vi.fn().mockResolvedValue({
-        trend_name: "AI coding assistants",
-        global_market: [
-          {
-            product: "Copilot",
-            company: "GitHub",
-            effects: "Developer productivity gains",
-          },
-        ],
-        ru_market: [],
-      }),
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce(
+          marketSection([
+            {
+              product: "Copilot",
+              company: "GitHub",
+              effects: "Developer productivity gains",
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(marketSection([])),
     };
     const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
 
@@ -535,17 +545,18 @@ describe("ReportGenerationGraph", () => {
   it("rescues analyst items when the model omits effects but the evidence snippet carries the factual detail", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = {
-      generate: vi.fn().mockResolvedValue({
-        trend_name: "AI coding assistants",
-        global_market: [
-          {
-            product: "Copilot",
-            company: "GitHub",
-            sources: ["https://example.com/copilot"],
-          },
-        ],
-        ru_market: [],
-      }),
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce(
+          marketSection([
+            {
+              product: "Copilot",
+              company: "GitHub",
+              sources: ["https://example.com/copilot"],
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(marketSection([])),
     };
     const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
 
@@ -579,18 +590,19 @@ describe("ReportGenerationGraph", () => {
   it("preserves the explicit RU no-implementation literal from the analyst", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = {
-      generate: vi.fn().mockResolvedValue({
-        trend_name: "AI coding assistants",
-        global_market: [
-          {
-            product: "Copilot",
-            company: "GitHub",
-            effects: "Developer productivity gains",
-            sources: ["https://example.com/copilot"],
-          },
-        ],
-        ru_market: ruMarketNotFound,
-      }),
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce(
+          marketSection([
+            {
+              product: "Copilot",
+              company: "GitHub",
+              effects: "Developer productivity gains",
+              sources: ["https://example.com/copilot"],
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(marketSection([])),
     };
     const tavilyResearchService = { search: vi.fn() };
     const graph = new ReportGenerationGraph(provider as never, tavilyResearchService as never);
@@ -927,12 +939,14 @@ describe("ReportGenerationGraph", () => {
 
     // Pipeline continued past the failed node; the assembler saw the degraded
     // analysis (markets fell back to "Не найдено"). Two model calls: translate + analyst.
-    expect(provider.generate).toHaveBeenCalledTimes(2);
+    expect(provider.generate).toHaveBeenCalledTimes(3);
   });
 
   type AnalyzeOnlyGraph = {
     analyze: (state: {
       topic: string;
+      englishTopic?: string;
+      guardedTopic?: string;
       validatedSources: Array<{ title: string; url: string; snippet: string }>;
     }) => Promise<{
       analysis: {
@@ -950,30 +964,31 @@ describe("ReportGenerationGraph", () => {
   it("drops analyst items whose company is a market-research aggregator", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = {
-      generate: vi.fn().mockResolvedValue({
-        trend_name: "AI coding assistants",
-        global_market: [
-          {
-            product: "Copilot",
-            company: "GitHub",
-            effects: "Developer productivity gains",
-            sources: ["https://example.com/copilot"],
-          },
-          {
-            product: "AI coding assistants market report",
-            company: "MarketsAndMarkets",
-            effects: "Market sized at billions",
-            sources: ["https://example.com/report"],
-          },
-          {
-            product: "Trend overview",
-            company: "Mordor Intelligence",
-            effects: "Growth forecast",
-            sources: ["https://example.com/mordor"],
-          },
-        ],
-        ru_market: ruMarketNotFound,
-      }),
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce(
+          marketSection([
+            {
+              product: "Copilot",
+              company: "GitHub",
+              effects: "Developer productivity gains",
+              sources: ["https://example.com/copilot"],
+            },
+            {
+              product: "AI coding assistants market report",
+              company: "MarketsAndMarkets",
+              effects: "Market sized at billions",
+              sources: ["https://example.com/report"],
+            },
+            {
+              product: "Trend overview",
+              company: "Mordor Intelligence",
+              effects: "Growth forecast",
+              sources: ["https://example.com/mordor"],
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(marketSection([])),
     };
     const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
 
@@ -1017,24 +1032,25 @@ describe("ReportGenerationGraph", () => {
   it("drops analyst items whose company is a description sentence, not a name", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = {
-      generate: vi.fn().mockResolvedValue({
-        trend_name: "cybersecurity",
-        global_market: [
-          {
-            product: "Threat platform",
-            company: "Global cybersecurity provider with a presence in Russia",
-            effects: "Broad protection",
-            sources: ["https://example.com/desc"],
-          },
-          {
-            product: "CrowdStrike Falcon",
-            company: "CrowdStrike",
-            effects: "Endpoint protection adoption",
-            sources: ["https://example.com/crowdstrike"],
-          },
-        ],
-        ru_market: ruMarketNotFound,
-      }),
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce(
+          marketSection([
+            {
+              product: "Threat platform",
+              company: "Global cybersecurity provider with a presence in Russia",
+              effects: "Broad protection",
+              sources: ["https://example.com/desc"],
+            },
+            {
+              product: "CrowdStrike Falcon",
+              company: "CrowdStrike",
+              effects: "Endpoint protection adoption",
+              sources: ["https://example.com/crowdstrike"],
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(marketSection([])),
     };
     const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
 
@@ -1223,18 +1239,19 @@ describe("ReportGenerationGraph", () => {
   it("splits a multi-company field into one clean item per company", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = {
-      generate: vi.fn().mockResolvedValue({
-        trend_name: "robotics",
-        global_market: [
-          {
-            product: "Industrial robots",
-            company: "ABB, FANUC and KUKA (industrial leaders)",
-            effects: "Widely deployed on assembly lines",
-            sources: ["https://example.com/robotics"],
-          },
-        ],
-        ru_market: [],
-      }),
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce(
+          marketSection([
+            {
+              product: "Industrial robots",
+              company: "ABB, FANUC and KUKA (industrial leaders)",
+              effects: "Widely deployed on assembly lines",
+              sources: ["https://example.com/robotics"],
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(marketSection([])),
     };
     const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
 
@@ -1256,24 +1273,25 @@ describe("ReportGenerationGraph", () => {
   it("drops a company that is a bare domain and resolves a source cited by title", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = {
-      generate: vi.fn().mockResolvedValue({
-        trend_name: "electric vehicles",
-        global_market: [
-          {
-            product: "Catalog",
-            company: "Rucars.ru",
-            effects: "Lists many brands",
-            sources: ["https://example.com/cars"],
-          },
-          {
-            product: "Model 3",
-            company: "Tesla",
-            effects: "Mass-market EV",
-            sources: ["Top 10 electric vehicle companies | TechMag"],
-          },
-        ],
-        ru_market: [],
-      }),
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce(
+          marketSection([
+            {
+              product: "Catalog",
+              company: "Rucars.ru",
+              effects: "Lists many brands",
+              sources: ["https://example.com/cars"],
+            },
+            {
+              product: "Model 3",
+              company: "Tesla",
+              effects: "Mass-market EV",
+              sources: ["Top 10 electric vehicle companies | TechMag"],
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(marketSection([])),
     };
     const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
 
@@ -1306,31 +1324,34 @@ describe("ReportGenerationGraph", () => {
   it("keeps a company in global out of ru_market (cross-market dedup)", async () => {
     const { ReportGenerationGraph } = await import("./report-generation.graph");
     const provider = {
-      generate: vi.fn().mockResolvedValue({
-        trend_name: "wearables",
-        global_market: [
-          {
-            product: "Watch GT",
-            company: "Huawei",
-            effects: "Global smartwatch sales",
-            sources: ["https://example.com/wearables"],
-          },
-        ],
-        ru_market: [
-          {
-            product: "Watch GT",
-            company: "Huawei",
-            effects: "Sold in Russia too",
-            sources: ["https://example.com/wearables"],
-          },
-          {
-            product: "Smart band",
-            company: "Yandex",
-            effects: "Russian wearable",
-            sources: ["https://example.com/wearables"],
-          },
-        ],
-      }),
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce(
+          marketSection([
+            {
+              product: "Watch GT",
+              company: "Huawei",
+              effects: "Global smartwatch sales",
+              sources: ["https://example.com/wearables"],
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(
+          marketSection([
+            {
+              product: "Watch GT",
+              company: "Huawei",
+              effects: "Sold in Russia too",
+              sources: ["https://example.com/wearables"],
+            },
+            {
+              product: "Smart band",
+              company: "Yandex",
+              effects: "Russian wearable",
+              sources: ["https://example.com/wearables"],
+            },
+          ]),
+        ),
     };
     const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
 
@@ -1374,6 +1395,50 @@ describe("ReportGenerationGraph", () => {
         ],
       }),
     };
+    provider.generate = vi
+      .fn()
+      .mockResolvedValueOnce(
+        marketSection([
+          {
+            product: "РњРѕСЃРєРІРёС‡ 3Рµ",
+            company: "РњРѕСЃРєРІРёС‡",
+            effects: "РџСЂРѕРґР°Р¶Рё СЌР»РµРєС‚СЂРѕРјРѕР±РёР»СЏ СѓР¶Рµ РёРґСѓС‚.",
+            sources: ["https://auto.example.ru/moskvich-3e"],
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        marketSection([
+          {
+            product: "Moskvich 3e",
+            company: "Moskvich",
+            effects: "Russian EV is already sold on the local market.",
+            sources: ["https://auto.example.ru/moskvich-3e"],
+          },
+        ]),
+      );
+    provider.generate = vi
+      .fn()
+      .mockResolvedValueOnce(
+        marketSection([
+          {
+            product: "Moskvich 3e",
+            company: "Moskvich",
+            effects: "Electric vehicle sales are already underway.",
+            sources: ["https://auto.example.ru/moskvich-3e"],
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        marketSection([
+          {
+            product: "Moskvich 3e",
+            company: "Moskvich",
+            effects: "Russian EV is already sold on the local market.",
+            sources: ["https://auto.example.ru/moskvich-3e"],
+          },
+        ]),
+      );
     const graph = new ReportGenerationGraph(provider as never, { search: vi.fn() } as never);
 
     const result = await (graph as unknown as AnalyzeOnlyGraph).analyze({
@@ -1390,9 +1455,9 @@ describe("ReportGenerationGraph", () => {
     expect(result.analysis.global_market).toBe(marketNotFound);
     expect(result.analysis.ru_market).toEqual([
       {
-        product: "Москвич 3е",
-        company: "Москвич",
-        effects: "Российский электромобиль уже продаётся на локальном рынке.",
+        product: "Moskvich 3e",
+        company: "Moskvich",
+        effects: "Russian EV is already sold on the local market.",
         sources: ["https://auto.example.ru/moskvich-3e"],
       },
     ]);
@@ -1480,23 +1545,28 @@ describe("ReportGenerationGraph", () => {
           market: "global" | "ru",
         ) => Array<{ title: string; url: string; snippet: string }>;
       }
-    ).selectRelevantSourcesForMarket("electric vehicles", "electric vehicles", [
-      {
-        title: "Notable Silicon Valley Electric Car Companies",
-        url: "https://builtinsf.com/electric-car-companies",
-        snippet: "ChargePoint, Tesla, Lucid Motors and other notable companies.",
-      },
-      {
-        title: "First Moskvich 3e launch",
-        url: "https://auto.example.ru/moskvich-3e",
-        snippet: "Russian EV sales are already underway for the Moskvich 3e.",
-      },
-      {
-        title: "Evolute i-Pro",
-        url: "https://auto.example.ru/evolute-i-pro",
-        snippet: "Domestic EV sedan already available on the Russian market.",
-      },
-    ], "ru");
+    ).selectRelevantSourcesForMarket(
+      "electric vehicles",
+      "electric vehicles",
+      [
+        {
+          title: "Notable Silicon Valley Electric Car Companies",
+          url: "https://builtinsf.com/electric-car-companies",
+          snippet: "ChargePoint, Tesla, Lucid Motors and other notable companies.",
+        },
+        {
+          title: "First Moskvich 3e launch",
+          url: "https://auto.example.ru/moskvich-3e",
+          snippet: "Russian EV sales are already underway for the Moskvich 3e.",
+        },
+        {
+          title: "Evolute i-Pro",
+          url: "https://auto.example.ru/evolute-i-pro",
+          snippet: "Domestic EV sedan already available on the Russian market.",
+        },
+      ],
+      "ru",
+    );
 
     expect(selectedRu.map((source) => source.url)).toEqual([
       "https://auto.example.ru/moskvich-3e",

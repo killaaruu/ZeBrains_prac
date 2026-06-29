@@ -8,6 +8,16 @@ const reportSchema = z.object({
   trend_name: z.string().min(1),
 });
 
+function openAiResponse(content: string) {
+  return {
+    ok: true,
+    json: vi.fn().mockResolvedValue({
+      choices: [{ message: { content }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    }),
+  };
+}
+
 describe("OllamaProvider", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -18,19 +28,17 @@ describe("OllamaProvider", () => {
     const fetchMock = vi
       .fn()
       .mockRejectedValueOnce(new Error("primary model timed out"))
-      .mockResolvedValueOnce({
-        ok: true,
-        json: vi.fn().mockResolvedValue({
-          response: JSON.stringify({ trend_name: "AI coding assistants" }),
-        }),
-      });
+      .mockResolvedValueOnce(
+        openAiResponse(JSON.stringify({ trend_name: "AI coding assistants" })),
+      );
 
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = new OllamaProvider(
       new ConfigService({
-        OLLAMA_BASE_URL: "http://ollama.local:11434",
-        LLM_MODEL_POOL: "qwen2.5:7b, gemma4:12b-it-qat",
+        LLM_BASE_URL: "https://api.302.ai/v1",
+        LLM_API_KEY: "sk-test-key",
+        LLM_MODEL: "gpt-4o-mini, gpt-4o",
       }),
     );
 
@@ -44,35 +52,34 @@ describe("OllamaProvider", () => {
 
     const firstBody = bodyOf(0);
     expect(firstBody).toMatchObject({
-      model: "qwen2.5:7b",
-      prompt: "Return a report",
-      stream: false,
-      options: { temperature: 0, num_predict: 4_096 },
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: "Return a report" }],
+      temperature: 0,
+      max_tokens: 4_096,
+      response_format: { type: "json_object" },
     });
-    // Structured outputs: `format` carries the JSON schema, not the string "json".
-    expect(firstBody.format).toMatchObject({ type: "object" });
 
     const secondBody = bodyOf(1);
-    expect(secondBody).toMatchObject({ model: "gemma4:12b-it-qat", prompt: "Return a report" });
-    expect(secondBody.format).toMatchObject({ type: "object" });
+    expect(secondBody).toMatchObject({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "Return a report" }],
+    });
     expect(warnSpy).toHaveBeenCalled();
   });
 
   it("uses the per-call timeout budget when provided", async () => {
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        response: JSON.stringify({ trend_name: "AI coding assistants" }),
-      }),
-    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(openAiResponse(JSON.stringify({ trend_name: "AI coding assistants" })));
 
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = new OllamaProvider(
       new ConfigService({
-        OLLAMA_BASE_URL: "http://ollama.local:11434",
-        LLM_MODEL_POOL: "qwen2.5:7b",
+        LLM_BASE_URL: "https://api.302.ai/v1",
+        LLM_API_KEY: "sk-test-key",
+        LLM_MODEL: "gpt-4o-mini",
       }),
     );
 
@@ -83,5 +90,92 @@ describe("OllamaProvider", () => {
     });
 
     expect(timeoutSpy).toHaveBeenCalledWith(4_321);
+  });
+
+  it("sends auth header when api key is set", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(openAiResponse(JSON.stringify({ trend_name: "AI coding assistants" })));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OllamaProvider(
+      new ConfigService({
+        LLM_BASE_URL: "https://api.302.ai/v1",
+        LLM_API_KEY: "sk-secret-123",
+        LLM_MODEL: "gpt-4o-mini",
+      }),
+    );
+
+    await provider.generate("test", reportSchema);
+
+    const headers = (fetchMock.mock.calls[0]?.[1] as { headers: Record<string, string> }).headers;
+    expect(headers.authorization).toBe("Bearer sk-secret-123");
+  });
+
+  it("does not send auth header when api key is empty", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(openAiResponse(JSON.stringify({ trend_name: "AI coding assistants" })));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OllamaProvider(
+      new ConfigService({
+        LLM_BASE_URL: "https://api.302.ai/v1",
+        LLM_API_KEY: "",
+        LLM_MODEL: "gpt-4o-mini",
+      }),
+    );
+
+    await provider.generate("test", reportSchema);
+
+    const headers = (fetchMock.mock.calls[0]?.[1] as { headers: Record<string, string> }).headers;
+    expect(headers.authorization).toBeUndefined();
+  });
+
+  it("handles API error response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        error: { message: "Incorrect API key provided", code: "invalid_api_key" },
+      }),
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OllamaProvider(
+      new ConfigService({
+        LLM_BASE_URL: "https://api.302.ai/v1",
+        LLM_API_KEY: "sk-bad-key",
+        LLM_MODEL: "gpt-4o-mini",
+      }),
+    );
+
+    await expect(provider.generate("test", reportSchema)).rejects.toThrow(
+      "Incorrect API key provided",
+    );
+  });
+
+  it("handles HTTP error status", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: vi.fn().mockResolvedValue("Rate limit exceeded"),
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = new OllamaProvider(
+      new ConfigService({
+        LLM_BASE_URL: "https://api.302.ai/v1",
+        LLM_API_KEY: "sk-test-key",
+        LLM_MODEL: "gpt-4o-mini",
+      }),
+    );
+
+    await expect(provider.generate("test", reportSchema)).rejects.toThrow(
+      "HTTP 429: Rate limit exceeded",
+    );
   });
 });

@@ -23,7 +23,7 @@ This document provides step-by-step instructions for deploying the TrendScout we
 ### 3. Local Development Setup
 ```bash
 pnpm install
-pnpm local:dev    # starts Postgres + Redis + API + web locally
+pnpm local:dev    # starts Postgres + Redis + API + worker + web locally
 ```
 
 ## Step 1: Create Vercel Project

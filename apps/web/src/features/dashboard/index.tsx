@@ -25,7 +25,8 @@ const reportStatusMeta: Record<
   queued: {
     label: "В очереди",
     badgeClassName: "border-slate-300 bg-slate-100 text-slate-700",
-    pendingCopy: "Отчёт поставлен в очередь на исследование. Живые обновления статуса появятся здесь.",
+    pendingCopy:
+      "Отчёт поставлен в очередь на исследование. Живые обновления статуса появятся здесь.",
   },
   thinking: {
     label: "Думает",
@@ -249,7 +250,9 @@ export function Dashboard({ reportId = null }: DashboardProps) {
             <Card>
               <CardHeader>
                 <CardTitle>Сгенерировать отчёт</CardTitle>
-                <CardDescription>Отправьте тему тренда в исследовательский пайплайн.</CardDescription>
+                <CardDescription>
+                  Отправьте тему тренда в исследовательский пайплайн.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <TopicForm />
@@ -376,7 +379,8 @@ export function Dashboard({ reportId = null }: DashboardProps) {
 
               {selectedReport && selectedReport.status === "error" && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-                  {selectedReport.error ?? "Не удалось сгенерировать отчёт. Попробуйте другую тему."}
+                  {selectedReport.error ??
+                    "Не удалось сгенерировать отчёт. Попробуйте другую тему."}
                 </div>
               )}
 

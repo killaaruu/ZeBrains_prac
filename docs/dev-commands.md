@@ -1,16 +1,17 @@
-# Dev-команды и справка «когда что запускать»
+# Dev Commands
 
-Справка по командам, вынесенная из корневого `CLAUDE.md`, чтобы не раздувать
-always-on контекст. Канонический флоу верификации — скилл `/verify`; этот файл —
-человекочитаемая опора под него.
+Reference guide for the repository command flow. The canonical verification flow
+is `/verify`; this file is the human-readable companion.
 
-## Тестовый раннер
+## Test Runner
 
-Vitest на всех слоях (api, web, client-core, shared, db-backend и т.д.). Тест-файлы лежат рядом с кодом: `foo.ts` → `foo.test.ts`.
+Vitest is used across the stack (`api`, `web`, `client-core`, `shared`,
+`db-backend`, and related packages). Test files live next to the code:
+`foo.ts` -> `foo.test.ts`.
 
-## Команды
+## Commands
 
-Все команды идут через `Makefile` (единая точка входа). `make help` — список целей.
+All commands go through the root `Makefile`. Run `make help` for the full list.
 
 ```bash
 # Full validation pipeline
@@ -21,18 +22,18 @@ make local
 make local-e2e
 
 # Customer demo (local API + worker behind the stable ngrok domain)
-make demo        # bring up the customer demo (Postgres + Redis + migrations + API + worker + ngrok)
-make demo-stop   # tear down the customer demo
+make demo
+make demo-stop
 
 # Individual commands
 make typecheck
 make test
 make build
 
-# Format + lint fix
+# Format + auto-fix
 make format
 
-# Format + lint check
+# Format check only
 make format-check
 
 # Per-package (PKG=<workspace>)
@@ -44,34 +45,46 @@ make test PKG=@repo/client-core
 make typecheck PKG=@repo/client-core
 make typecheck PKG=@repo/services-client
 
-# After Zod schema change in packages/shared
-make test PKG=@repo/shared && make typecheck
+# After a shared Zod schema change
+make test PKG=@repo/shared
+make typecheck
 
-# After Drizzle schema change (backend)
+# After a Drizzle schema change
 make db-generate
 make db-migrate
 
-# After API endpoint change
-make build PKG=@repo/api && make typecheck PKG=@repo/api
-
-# Client API usage
-# There is no OpenAPI client generation pipeline in this repo.
-# Frontend/client-core code uses the hand-written Axios wrappers and shared Zod/types.
+# After an API endpoint change
+make build PKG=@repo/api
+make typecheck PKG=@repo/api
 ```
 
-## Когда что запускать
+## When To Run What
 
-- Изменены файлы в `packages/shared/` → запусти `make typecheck` (влияет на всё)
-- Изменены файлы в `packages/client-core/` → его тесты + typecheck web
-- Изменены файлы в `packages/services-client/` → его тесты + typecheck web
-- Изменены файлы в `packages/db-backend/` → тесты API + сгенерируй миграцию (`make db-generate`), если менялась схема
-- Изменены файлы в `apps/api/` → тесты API + typecheck + пересборка для codegen
-- Перед коммитом → запусти `make check`
+- If you changed `packages/shared/`, run `make typecheck`; it affects the whole repo.
+- If you changed `packages/client-core/`, run its tests and typecheck the web app.
+- If you changed `packages/services-client/`, run its tests and typecheck the web app.
+- If you changed `packages/db-backend/`, run API tests and generate a migration if the schema changed.
+- If you changed `apps/api/`, run API tests, typecheck, and rebuild if needed.
+- Before commit or PR, run `make check`.
 
-## Dev-окружение
+## Local Development
 
-Дефолтный путь локального старта — `make local` для worktree-разработки. Он поднимает Postgres и Redis через `docker-compose.local.yml`, подбирает свободные порты под текущий worktree, применяет миграции, стартует API/web через pnpm и пишет сгенерированные env/state в `.local-env/`.
+The default local startup path is `make local`. It prepares a worktree-safe local
+environment by:
 
-Используй `make local-e2e` для e2e-проверки API, которой нужна локальная инфраструктура. Для кастомных e2e-раннеров используй `make local-run CMD="<command>"`, чтобы переиспользовать то же подготовленное окружение. Не собирай вручную процессы Postgres/Redis/API/web, если только сам скрипт local-env не является объектом отладки.
+- starting Postgres and Redis via `docker-compose.local.yml`
+- selecting free ports for the current worktree
+- applying migrations
+- starting the API, the report-generation worker, and the web app
+- writing generated env/state into `.local-env/`
 
-Для UI-работы стартуй dev-сервер через `make local` и проверяй в браузере перед тем, как сообщать о завершении.
+For TrendScout, the worker is part of the required local stack. If you start
+only the API and web app, the UI can submit report jobs, but they remain stuck
+in `queued` because no worker is consuming the BullMQ queue.
+
+Use `make local-e2e` for API e2e checks that require local infrastructure. For
+custom e2e commands, use `make local-run CMD="<command>"` so you reuse the same
+prepared environment.
+
+For UI work, start `make local` and verify behavior in a browser before marking
+the task complete.

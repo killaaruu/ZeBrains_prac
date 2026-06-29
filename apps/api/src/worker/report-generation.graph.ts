@@ -247,7 +247,7 @@ export class ReportGenerationGraph {
    */
   private async translateTopicToEnglish(topic: string): Promise<string> {
     const normalized = topic.trim();
-    if (!/[А-Яа-яЁё]/u.test(normalized)) return normalized;
+    if (!this.containsCyrillic(normalized)) return normalized;
 
     try {
       const result = await this.ollamaProvider.generate(
@@ -306,21 +306,23 @@ export class ReportGenerationGraph {
    * contract, leaving sustainability scoring to the dedicated downstream node.
    */
   private async analyze(state: GraphState): Promise<Pick<GraphState, "analysis">> {
+    const englishTopic = state.englishTopic ?? state.topic;
+    const guardedTopic = state.guardedTopic ?? this.formatTopicForPrompt(state.topic);
     const globalSources = this.selectRelevantSourcesForMarket(
       state.topic,
-      state.englishTopic,
+      englishTopic,
       state.validatedSources,
       "global",
     );
     const ruSources = this.selectRelevantSourcesForMarket(
       state.topic,
-      state.englishTopic,
+      englishTopic,
       state.validatedSources,
       "ru",
     );
     const [globalSection, ruSection] = await Promise.all([
-      this.analyzeMarketSection("global", state.guardedTopic, globalSources),
-      this.analyzeMarketSection("ru", state.guardedTopic, ruSources),
+      this.analyzeMarketSection("global", guardedTopic, globalSources),
+      this.analyzeMarketSection("ru", guardedTopic, ruSources),
     ]);
     /*
     const analysis = (await this.ollamaProvider.generate(
@@ -415,7 +417,7 @@ export class ReportGenerationGraph {
       if (sources.length === 0) {
         continue;
       }
-      const effects = item.effects.trim() || this.inferItemEffects(item, sources, fedSources);
+      const effects = item.effects?.trim() || this.inferItemEffects(item, sources, fedSources);
       if (!effects) {
         continue;
       }
@@ -448,7 +450,10 @@ export class ReportGenerationGraph {
    * normalized url, then by normalized title, then fuzzily. If nothing resolves, attribute
    * to the fed source set (all validated + topic-relevant) so a real company is not lost.
    */
-  private resolveItemSources(item: LlmMarketItem, fedSources: readonly TavilySourceCandidate[]): string[] {
+  private resolveItemSources(
+    item: LlmMarketItem,
+    fedSources: readonly TavilySourceCandidate[],
+  ): string[] {
     const byUrl = new Map(fedSources.map((s) => [this.normalizeUrl(s.url), s.url]));
     const byTitle = new Map(
       fedSources.map((s) => [this.normalizeTitleKey(s.title), s.url] as const).filter(([k]) => k),
@@ -538,7 +543,10 @@ export class ReportGenerationGraph {
   }
 
   private normalizeEvidenceText(value: string): string {
-    return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    return value
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
   }
 
   private normalizeTitleKey(value: string): string {
@@ -594,7 +602,7 @@ export class ReportGenerationGraph {
     item: Pick<ReportMarketItem, "company" | "product" | "effects" | "sources">,
     fedSources: readonly TavilySourceCandidate[],
   ): boolean {
-    if (/[А-Яа-яЁё]/u.test(item.company)) {
+    if (this.containsCyrillic(item.company)) {
       return true;
     }
 
@@ -725,7 +733,7 @@ export class ReportGenerationGraph {
     // news, startup lists) rather than "market size report" SEO mills — those produce
     // extractable vendor names for the analyst. Global queries go out in English (richer
     // web coverage); the Russia-specific queries stay Russian.
-    if (/[А-Яа-яЁё]/u.test(normalizedTopic)) {
+    if (this.containsCyrillic(normalizedTopic)) {
       const english = englishTopic.trim() || normalizedTopic;
       return [
         `top ${english} companies`,
@@ -821,10 +829,10 @@ export class ReportGenerationGraph {
     englishTopic: string,
     validatedSources: readonly TavilySourceCandidate[],
   ): TavilySourceCandidate[] {
-    return [
+    return this.deduplicateSourcesByUrl([
       ...this.selectRelevantSourcesForMarket(topic, englishTopic, validatedSources, "global"),
       ...this.selectRelevantSourcesForMarket(topic, englishTopic, validatedSources, "ru"),
-    ];
+    ]);
   }
 
   private selectRelevantSourcesForMarket(
@@ -838,7 +846,8 @@ export class ReportGenerationGraph {
     const marketScopedSources = validatedSources.filter((source) =>
       market === "ru" ? this.isRussiaSource(source) : !this.isRussiaSource(source),
     );
-    const sourcesToSearch = marketScopedSources.length > 0 ? marketScopedSources : [...validatedSources];
+    const sourcesToSearch =
+      marketScopedSources.length > 0 ? marketScopedSources : [...validatedSources];
 
     const relevantSources =
       topicTokens.length === 0
@@ -960,7 +969,7 @@ export class ReportGenerationGraph {
 
   /** Lowercase + alphanumerics only, so "Mordor Intelligence" → "mordorintelligence". */
   private normalizeCompanyKey(name: string): string {
-    return name.toLowerCase().replace(/[^a-z0-9]+/gu, "");
+    return name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
   }
 
   /**
@@ -1030,6 +1039,25 @@ export class ReportGenerationGraph {
       snippet: source.snippet,
       content: source.rawContent ? source.rawContent.slice(0, RAW_CONTENT_CHAR_LIMIT) : undefined,
     }));
+  }
+
+  private containsCyrillic(value: string): boolean {
+    return /\p{Script=Cyrillic}/u.test(value);
+  }
+
+  private deduplicateSourcesByUrl(
+    sources: readonly TavilySourceCandidate[],
+  ): TavilySourceCandidate[] {
+    const uniqueByUrl = new Map<string, TavilySourceCandidate>();
+
+    for (const source of sources) {
+      const key = this.normalizeUrl(source.url);
+      if (!uniqueByUrl.has(key)) {
+        uniqueByUrl.set(key, source);
+      }
+    }
+
+    return [...uniqueByUrl.values()];
   }
 
   // Small local models rarely reproduce a source URL byte-for-byte (trailing

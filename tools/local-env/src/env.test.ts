@@ -83,8 +83,8 @@ describe("buildRuntimeEnv", () => {
   it("wires TrendScout agent runtime defaults into the API environment", () => {
     const env = buildRuntimeEnv(makeRuntimeInput());
 
-    expect(env.api.OLLAMA_BASE_URL).toBe("http://localhost:11434");
-    expect(env.api.LLM_MODEL_POOL).toBe("qwen2.5:7b,gemma4:12b-it-qat");
+    expect(env.api.LLM_BASE_URL).toBe("https://api.302.ai/v1");
+    expect(env.api.LLM_MODEL).toBe("gpt-4o-mini");
     expect(env.api.TAVILY_API_KEY).toBeUndefined();
   });
 
@@ -92,15 +92,17 @@ describe("buildRuntimeEnv", () => {
     const env = buildRuntimeEnv(
       makeRuntimeInput({
         hostEnv: {
-          OLLAMA_BASE_URL: "http://ollama.internal:11434",
-          LLM_MODEL_POOL: "qwen2.5:14b,gemma4:12b",
+          LLM_BASE_URL: "https://custom.api.com/v1",
+          LLM_API_KEY: "sk-custom-key",
+          LLM_MODEL: "deepseek-chat",
           TAVILY_API_KEY: "tvly-local-dev",
         },
       }),
     );
 
-    expect(env.api.OLLAMA_BASE_URL).toBe("http://ollama.internal:11434");
-    expect(env.api.LLM_MODEL_POOL).toBe("qwen2.5:14b,gemma4:12b");
+    expect(env.api.LLM_BASE_URL).toBe("https://custom.api.com/v1");
+    expect(env.api.LLM_API_KEY).toBe("sk-custom-key");
+    expect(env.api.LLM_MODEL).toBe("deepseek-chat");
     expect(env.api.TAVILY_API_KEY).toBe("tvly-local-dev");
   });
 });

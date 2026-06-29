@@ -3,8 +3,8 @@ import { z } from "zod";
 
 const logger = new Logger("EnvValidation");
 
-export const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
-export const DEFAULT_LLM_MODEL_POOL = "qwen2.5:7b,gemma4:12b-it-qat";
+export const DEFAULT_LLM_BASE_URL = "https://api.302.ai/v1";
+export const DEFAULT_LLM_MODEL = "gpt-4o-mini";
 
 const emptyStringToUndefined = (value: unknown) => (value === "" ? undefined : value);
 const optionalString = z.preprocess(emptyStringToUndefined, z.string().optional());
@@ -46,15 +46,16 @@ const envSchema = z
     REDIS_URL: optionalUrl,
 
     // Optional - Agent runtime (TrendScout)
-    OLLAMA_BASE_URL: z.preprocess(
+    LLM_API_KEY: optionalString,
+    LLM_BASE_URL: z.preprocess(
       emptyStringToUndefined,
-      z.string().url().default(DEFAULT_OLLAMA_BASE_URL),
+      z.string().url().default(DEFAULT_LLM_BASE_URL),
     ),
-    LLM_MODEL_POOL: z.preprocess(
+    LLM_MODEL: z.preprocess(
       emptyStringToUndefined,
       z
         .string()
-        .default(DEFAULT_LLM_MODEL_POOL)
+        .default(DEFAULT_LLM_MODEL)
         .refine(
           (value) => value.split(",").every((model) => model.trim().length > 0),
           "Must be a comma-separated list of model names",
@@ -79,8 +80,24 @@ const envSchema = z
 
 export type EnvConfig = z.infer<typeof envSchema>;
 
+function normalizeEnvAliases(config: Record<string, unknown>): Record<string, unknown> {
+  if (config.LLM_MODEL !== undefined) {
+    return config;
+  }
+
+  if (typeof config.LLM_MODEL_POOL !== "string") {
+    return config;
+  }
+
+  return {
+    ...config,
+    LLM_MODEL: config.LLM_MODEL_POOL,
+  };
+}
+
 export function validateEnv(config: Record<string, unknown>): EnvConfig {
-  const result = envSchema.safeParse(config);
+  const normalizedConfig = normalizeEnvAliases(config);
+  const result = envSchema.safeParse(normalizedConfig);
 
   if (!result.success) {
     const errors = result.error.issues

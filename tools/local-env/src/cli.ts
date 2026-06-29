@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { cwd, exit } from "node:process";
+import { buildDevProcessSpecs } from "./dev-processes";
 import { buildLightRuntimeEnv, buildRuntimeEnv } from "./env";
 import {
   buildViteDevCommand,
@@ -110,25 +111,12 @@ async function runDev(): Promise<void> {
   await defaultDriver.seedAdmin(config);
 
   processes.push(
-    startManagedProcess(["pnpm", "--filter", "@repo/api", "dev"], {
-      cwd: config.repoRoot,
-      env: config.runtimeEnv.api,
-      label: "api",
-    }),
-    // Report-generation worker: consumes the BullMQ queue. Without it, submitted
-    // reports sit in `queued` forever.
-    startManagedProcess(["pnpm", "--filter", "@repo/api", "dev:worker"], {
-      cwd: config.repoRoot,
-      env: config.runtimeEnv.api,
-      label: "worker",
-    }),
-    startManagedProcess(
-      buildViteDevCommand("@repo/web", config.runtimeEnv.web.VITE_WEB_PORT ?? "5173"),
-      {
+    ...buildDevProcessSpecs(config.runtimeEnv.web.VITE_WEB_PORT ?? "5173").map((spec) =>
+      startManagedProcess(spec.command, {
         cwd: config.repoRoot,
-        env: config.runtimeEnv.web,
-        label: "web",
-      },
+        env: spec.envScope === "api" ? config.runtimeEnv.api : config.runtimeEnv.web,
+        label: spec.label,
+      }),
     ),
   );
 

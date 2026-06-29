@@ -170,7 +170,9 @@ describe("Dashboard", () => {
     expect(screen.getAllByText("В очереди").length).toBeGreaterThan(0);
     expect(screen.getByText("Статус: queued (В очереди)")).toBeInTheDocument();
     expect(
-      screen.getByText("Отчёт поставлен в очередь на исследование. Живые обновления статуса появятся здесь."),
+      screen.getByText(
+        "Отчёт поставлен в очередь на исследование. Живые обновления статуса появятся здесь.",
+      ),
     ).toBeInTheDocument();
   });
 

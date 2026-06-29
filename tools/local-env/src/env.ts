@@ -26,8 +26,8 @@ export type SupabaseRuntimeEnv = {
 };
 
 const PLACEHOLDER_SUPABASE_URL = "https://local-dev-placeholder.supabase.co";
-const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
-const DEFAULT_LLM_MODEL_POOL = "qwen2.5:7b,gemma4:12b-it-qat";
+const DEFAULT_LLM_BASE_URL = "https://api.302.ai/v1";
+const DEFAULT_LLM_MODEL = "gpt-4o-mini";
 
 function definedEntries(values: Record<string, string | undefined>): Record<string, string> {
   return Object.fromEntries(
@@ -76,11 +76,10 @@ export function buildRuntimeEnv(input: RuntimeEnvInput): RuntimeEnv {
     SUPABASE_WEBHOOK_SECRET: supabase.webhookSecret,
   });
   const agentRuntimeEnv = definedEntries({
-    OLLAMA_BASE_URL: hostEnv.OLLAMA_BASE_URL ?? DEFAULT_OLLAMA_BASE_URL,
-    LLM_MODEL_POOL: hostEnv.LLM_MODEL_POOL ?? DEFAULT_LLM_MODEL_POOL,
+    LLM_BASE_URL: hostEnv.LLM_BASE_URL ?? DEFAULT_LLM_BASE_URL,
+    LLM_API_KEY: hostEnv.LLM_API_KEY,
+    LLM_MODEL: hostEnv.LLM_MODEL ?? DEFAULT_LLM_MODEL,
     TAVILY_API_KEY: hostEnv.TAVILY_API_KEY,
-    // Local GPUs are slower than prod, so default the LLM node-timeout scale up
-    // (overridable from the host env / root .env).
     LLM_NODE_TIMEOUT_SCALE: hostEnv.LLM_NODE_TIMEOUT_SCALE ?? "6",
   });
   const clientSupabaseEnv = definedEntries({

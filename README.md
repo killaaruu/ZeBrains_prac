@@ -51,10 +51,10 @@ Requires Docker + Node 24 + pnpm.
 
 ```bash
 pnpm install
-pnpm local:dev      # Postgres + Redis (Docker) + migrations + seed + API + web
+pnpm local:dev      # Postgres + Redis (Docker) + migrations + seed + API + worker + web
 ```
 
-`local:dev` allocates free ports per worktree and writes state to `.local-env/`. It boots **without a real Supabase** using a local-dev auth bypass (a `Local Admin` profile is seeded directly). To use a real Supabase, export `LOCAL_DEV_SUPABASE_URL`, `LOCAL_DEV_SUPABASE_PUBLISHABLE_KEY`, and `LOCAL_DEV_SUPABASE_SERVICE_ROLE_KEY` before running.
+`local:dev` allocates free ports per worktree and writes state to `.local-env/`. It boots **without a real Supabase** using a local-dev auth bypass (a `Local Admin` profile is seeded directly). The full local TrendScout stack is **API + report-generation worker + web**; without the worker, submitted reports remain queued. To use a real Supabase, export `LOCAL_DEV_SUPABASE_URL`, `LOCAL_DEV_SUPABASE_PUBLISHABLE_KEY`, and `LOCAL_DEV_SUPABASE_SERVICE_ROLE_KEY` before running.
 
 Other entry points (all via the `Makefile` — run `make help`):
 
@@ -168,7 +168,7 @@ The Helm chart (`deploy/charts/api/`) runs migrations as an ArgoCD PreSync hook 
    - `apps/web/src/features/example/` + `apps/web/src/app/routes/_app/example.tsx` → your UI
 3. Update the sidebar nav (`apps/web/src/shared/components/layout/data/sidebar-data.ts`).
 4. Wire deployment variables/secrets (see GitOps above) and your Supabase project.
-5. Run `make check` and `make local:dev` to confirm green + booting.
+5. Run `make check` and `make local` (or `pnpm local:dev`) to confirm green + booting with API + worker + web.
 
 The layer-scaffolder skills (`new-drizzle-table`, `new-shared-schema`, `new-api-module`, `new-client-hook`, `new-frontend-feature`) automate steps 2–3.
 
