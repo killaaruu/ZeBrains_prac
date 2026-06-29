@@ -33,6 +33,7 @@ describe("sidebarData", () => {
 
   it("uses TrendScout product metadata instead of template placeholders", () => {
     expect(sidebarData.user.email).toBe("demo@trendscout.app");
+    expect(sidebarData.user.avatar).toBe("");
     expect(sidebarData.teams).toEqual([
       expect.objectContaining({
         name: "TrendScout",

@@ -23,7 +23,7 @@ const rawSidebarData: SidebarData = {
   user: {
     name: "TrendScout Demo",
     email: "demo@trendscout.app",
-    avatar: "/avatars/placeholder.png",
+    avatar: "",
   },
   teams: [
     {
