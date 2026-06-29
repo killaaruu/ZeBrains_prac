@@ -25,12 +25,13 @@ const reportStatusMeta: Record<
   queued: {
     label: "В очереди",
     badgeClassName: "border-slate-300 bg-slate-100 text-slate-700",
-    pendingCopy: "Report is queued for research. Live status updates will appear here.",
+    pendingCopy:
+      "Отчёт поставлен в очередь на исследование. Живые обновления статуса появятся здесь.",
   },
   thinking: {
     label: "Думает",
     badgeClassName: "border-amber-300 bg-amber-100 text-amber-700",
-    pendingCopy: "The agents are analyzing sources now. Live status updates will appear here.",
+    pendingCopy: "Агенты сейчас анализируют источники. Живые обновления статуса появятся здесь.",
   },
   done: {
     label: "Готово",
@@ -133,7 +134,7 @@ function renderMarket(
   if (items === null || items === undefined) {
     return (
       <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-5">
-        <p className="text-sm text-muted-foreground">No validated findings yet.</p>
+        <p className="text-sm text-muted-foreground">Подтверждённых находок пока нет.</p>
       </div>
     );
   }
@@ -248,8 +249,10 @@ export function Dashboard({ reportId = null }: DashboardProps) {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Generate report</CardTitle>
-                <CardDescription>Submit a trend topic for the research pipeline.</CardDescription>
+                <CardTitle>Сгенерировать отчёт</CardTitle>
+                <CardDescription>
+                  Отправьте тему тренда в исследовательский пайплайн.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <TopicForm />
@@ -258,8 +261,8 @@ export function Dashboard({ reportId = null }: DashboardProps) {
 
             <Card>
               <CardHeader>
-                <CardTitle>History</CardTitle>
-                <CardDescription>{reports.data?.length ?? 0} reports</CardDescription>
+                <CardTitle>История</CardTitle>
+                <CardDescription>{reports.data?.length ?? 0} отчётов</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Input
@@ -268,14 +271,14 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                   placeholder="Найти отчет"
                 />
                 {reports.isLoading && (
-                  <p className="text-sm text-muted-foreground">Loading reports...</p>
+                  <p className="text-sm text-muted-foreground">Загрузка отчётов...</p>
                 )}
                 {reports.isError && (
-                  <p className="text-sm text-destructive">Failed to load reports.</p>
+                  <p className="text-sm text-destructive">Не удалось загрузить отчёты.</p>
                 )}
                 {reports.data?.length === 0 && (
                   <p className="text-sm text-muted-foreground">
-                    No reports yet. Submit your first topic.
+                    Отчётов пока нет. Отправьте первую тему.
                   </p>
                 )}
                 {reports.data?.length !== 0 && filteredReports.length === 0 && (
@@ -345,7 +348,7 @@ export function Dashboard({ reportId = null }: DashboardProps) {
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <CardTitle>{selectedReport?.topic ?? "Latest report"}</CardTitle>
+                  <CardTitle>{selectedReport?.topic ?? "Последний отчёт"}</CardTitle>
                   {selectedDuration && (
                     <p className="mt-2 text-sm text-muted-foreground">
                       Время обработки: {selectedDuration}
@@ -356,27 +359,28 @@ export function Dashboard({ reportId = null }: DashboardProps) {
               </div>
               <CardDescription>
                 {selectedReport
-                  ? `Status: ${selectedReport.status} (${selectedStatusMeta?.label})`
-                  : "Select a report from history."}
+                  ? `Статус: ${selectedReport.status} (${selectedStatusMeta?.label})`
+                  : "Выберите отчёт из истории."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {!selectedReport && (
-                <p className="text-sm text-muted-foreground">No report selected yet.</p>
+                <p className="text-sm text-muted-foreground">Отчёт пока не выбран.</p>
               )}
 
               {selectedReport && (
                 <div className="flex items-center gap-3 rounded-lg border border-dashed px-4 py-3">
                   {renderStatusBadge(selectedReport.status)}
                   <p className="text-sm text-muted-foreground">
-                    Live updates are enabled for this report.
+                    Для этого отчёта включены живые обновления.
                   </p>
                 </div>
               )}
 
               {selectedReport && selectedReport.status === "error" && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-                  {selectedReport.error ?? "Report generation failed. Try a different topic."}
+                  {selectedReport.error ??
+                    "Не удалось сгенерировать отчёт. Попробуйте другую тему."}
                 </div>
               )}
 
@@ -385,7 +389,7 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                 selectedReport.status !== "error" && (
                   <p className="text-sm text-muted-foreground">
                     {selectedStatusMeta?.pendingCopy ??
-                      "Report is still processing. Results will appear here when validation completes."}
+                      "Отчёт всё ещё обрабатывается. Результаты появятся здесь после завершения проверки."}
                   </p>
                 )}
 
@@ -393,11 +397,11 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                 <>
                   <div className="flex items-center justify-between rounded-lg border p-4">
                     <div>
-                      <p className="text-sm text-muted-foreground">Trend</p>
+                      <p className="text-sm text-muted-foreground">Тренд</p>
                       <p className="text-lg font-semibold">{selectedReport.result.trend_name}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Sustainability score</p>
+                      <p className="text-sm text-muted-foreground">Оценка устойчивости</p>
                       <p className="text-3xl font-bold">
                         {selectedReport.result.sustainability.score}/10
                       </p>
@@ -406,7 +410,7 @@ export function Dashboard({ reportId = null }: DashboardProps) {
 
                   <div className="grid gap-6 lg:grid-cols-2">
                     <section className="space-y-3">
-                      <h2 className="text-lg font-semibold">Global market</h2>
+                      <h2 className="text-lg font-semibold">Глобальный рынок</h2>
                       {renderMarket(selectedReport.result.global_market, {
                         expandedItems,
                         onToggle: toggleExpandedItem,
@@ -414,7 +418,7 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                     </section>
 
                     <section className="space-y-3">
-                      <h2 className="text-lg font-semibold">RU market</h2>
+                      <h2 className="text-lg font-semibold">Рынок РФ</h2>
                       {renderMarket(selectedReport.result.ru_market, {
                         expandedItems,
                         onToggle: toggleExpandedItem,
@@ -425,7 +429,7 @@ export function Dashboard({ reportId = null }: DashboardProps) {
                   <div className="grid gap-4 lg:grid-cols-2">
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-base">Arguments for</CardTitle>
+                        <CardTitle className="text-base">Аргументы за</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-2">
@@ -440,7 +444,7 @@ export function Dashboard({ reportId = null }: DashboardProps) {
 
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-base">Arguments against</CardTitle>
+                        <CardTitle className="text-base">Аргументы против</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-2">

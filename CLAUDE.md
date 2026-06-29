@@ -91,7 +91,7 @@ After non-trivial work: optionally `/simplify` to dedupe / improve the diff.
 
 ## Dev Environment
 
-Default local startup is `make local` (worktree-safe: Postgres + Redis via `docker-compose.local.yml`, free ports per worktree, migrations applied, API + web started, env under `.local-env/`). It boots without a real Supabase by using a local-dev auth bypass; point it at a real Supabase by exporting `LOCAL_DEV_SUPABASE_URL` / `LOCAL_DEV_SUPABASE_PUBLISHABLE_KEY` / `LOCAL_DEV_SUPABASE_SERVICE_ROLE_KEY`. Use `make local-e2e` for API e2e that needs local infra. For UI work, start `make local` and verify in a browser before reporting completion. Details: `docs/dev-commands.md`.
+Default local startup is `make local` (worktree-safe: Postgres + Redis via `docker-compose.local.yml`, free ports per worktree, migrations applied, API + report worker + web started, env under `.local-env/`). It boots without a real Supabase by using a local-dev auth bypass; point it at a real Supabase by exporting `LOCAL_DEV_SUPABASE_URL` / `LOCAL_DEV_SUPABASE_PUBLISHABLE_KEY` / `LOCAL_DEV_SUPABASE_SERVICE_ROLE_KEY`. The worker is required for the main TrendScout flow; without it, submitted reports remain queued. Use `make local-e2e` for API e2e that needs local infra. For UI work, start `make local` and verify in a browser before reporting completion. Details: `docs/dev-commands.md`.
 
 ## NestJS DI Rules (Critical)
 

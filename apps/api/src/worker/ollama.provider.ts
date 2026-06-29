@@ -1,33 +1,37 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { ZodType } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 
-const OLLAMA_GENERATE_PATH = "/api/generate";
-const OLLAMA_REQUEST_TIMEOUT_MS = 120_000;
-// Cap output so a runaway model can't be cut off mid-JSON (gemma returned an
-// "Unterminated string"); large enough for a full market analysis.
-const OLLAMA_NUM_PREDICT = 4_096;
+const LLM_CHAT_PATH = "/chat/completions";
+const LLM_REQUEST_TIMEOUT_MS = 120_000;
+const LLM_MAX_TOKENS = 4_096;
 
 export interface OllamaGenerateOptions {
   timeoutMs?: number;
 }
 
-interface OllamaGenerateResponse {
-  error?: string;
-  response?: string;
+interface OpenAIChoice {
+  message: { content: string };
+  finish_reason: string;
+}
+
+interface OpenAIResponse {
+  choices?: OpenAIChoice[];
+  error?: { message: string; type?: string; code?: string };
 }
 
 @Injectable()
 export class OllamaProvider {
   private readonly logger = new Logger(OllamaProvider.name);
   private readonly baseUrl: string;
+  private readonly apiKey: string;
   private readonly modelPool: string[];
 
   constructor(private readonly configService: ConfigService) {
-    this.baseUrl = this.configService.getOrThrow<string>("OLLAMA_BASE_URL");
+    this.baseUrl = this.configService.getOrThrow<string>("LLM_BASE_URL").replace(/\/+$/, "");
+    this.apiKey = this.configService.get<string>("LLM_API_KEY") ?? "";
     this.modelPool = this.configService
-      .getOrThrow<string>("LLM_MODEL_POOL")
+      .getOrThrow<string>("LLM_MODEL")
       .split(",")
       .map((model) => model.trim())
       .filter((model) => model.length > 0);
@@ -51,18 +55,18 @@ export class OllamaProvider {
         const response = await this.requestModel(model, prompt, schema, options);
         return schema ? schema.parse(JSON.parse(response)) : response;
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown Ollama error";
+        const message = error instanceof Error ? error.message : "Unknown LLM error";
         failures.push(`${model}: ${message}`);
 
         if (index < this.modelPool.length - 1) {
           this.logger.warn(
-            `Ollama model ${model} failed (${message}). Falling back to ${this.modelPool[index + 1]}.`,
+            `LLM model ${model} failed (${message}). Falling back to ${this.modelPool[index + 1]}.`,
           );
         }
       }
     }
 
-    throw new Error(`All Ollama models failed: ${failures.join("; ")}`);
+    throw new Error(`All LLM models failed: ${failures.join("; ")}`);
   }
 
   private async requestModel<T>(
@@ -71,35 +75,49 @@ export class OllamaProvider {
     schema?: ZodType<T>,
     options?: OllamaGenerateOptions,
   ): Promise<string> {
-    const response = await fetch(`${this.baseUrl}${OLLAMA_GENERATE_PATH}`, {
+    const body: Record<string, unknown> = {
+      model,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0,
+      max_tokens: LLM_MAX_TOKENS,
+    };
+
+    if (schema) {
+      body.response_format = { type: "json_object" };
+    }
+
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+    };
+
+    if (this.apiKey) {
+      headers.authorization = `Bearer ${this.apiKey}`;
+    }
+
+    const response = await fetch(`${this.baseUrl}${LLM_CHAT_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model,
-        prompt,
-        stream: false,
-        // Structured outputs: constrain generation to the exact schema instead of
-        // free-form `format: "json"`, so small local models conform reliably.
-        ...(schema ? { format: zodToJsonSchema(schema, { $refStrategy: "none" }) } : {}),
-        options: { temperature: 0, num_predict: OLLAMA_NUM_PREDICT },
-      }),
-      signal: AbortSignal.timeout(options?.timeoutMs ?? OLLAMA_REQUEST_TIMEOUT_MS),
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(options?.timeoutMs ?? LLM_REQUEST_TIMEOUT_MS),
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const errorBody = await response.text().catch(() => "");
+      throw new Error(`HTTP ${response.status}: ${errorBody}`);
     }
 
-    const data = (await response.json()) as OllamaGenerateResponse;
+    const data = (await response.json()) as OpenAIResponse;
 
     if (data.error) {
-      throw new Error(data.error);
+      throw new Error(data.error.message ?? JSON.stringify(data.error));
     }
 
-    if (!data.response) {
-      throw new Error("Ollama response payload did not include response text");
+    const content = data.choices?.[0]?.message?.content;
+
+    if (!content) {
+      throw new Error("LLM response did not include message content");
     }
 
-    return data.response;
+    return content;
   }
 }

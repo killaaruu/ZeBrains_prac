@@ -38,16 +38,16 @@ export function TopicForm() {
           name="topic"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Research topic</FormLabel>
+              <FormLabel>Тема исследования</FormLabel>
               <FormControl>
-                <Input placeholder="AI coding assistants" {...field} />
+                <Input placeholder="Электромобили" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
         <Button type="submit" disabled={create.isPending}>
-          {create.isPending ? "Submitting..." : "Generate report"}
+          {create.isPending ? "Отправка..." : "Сгенерировать отчёт"}
         </Button>
       </form>
     </Form>

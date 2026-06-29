@@ -77,4 +77,26 @@ describe("scoreSustainability", () => {
       ]),
     );
   });
+
+  it("emits Russian sustainability arguments for a Russian topic", () => {
+    const sustainability = scoreSustainability({
+      topic: "Электромобили",
+      globalMarket: [microsoftCopilot, amazonQ],
+      ruMarket: [
+        {
+          product: "Москвич 3е",
+          company: "Москвич",
+          effects: "Продажи электромобиля уже запущены на локальном рынке.",
+          sources: ["https://example.com/moskvich"],
+        },
+      ],
+    });
+
+    expect(sustainability.arguments_for.join(" ")).toMatch(/[А-Яа-яЁё]/u);
+    expect(sustainability.arguments_against.join(" ")).toMatch(/[А-Яа-яЁё]/u);
+    expect(sustainability.arguments_for.join(" ")).not.toMatch(/\bValidated\b|\bMeasured\b/u);
+    expect(sustainability.arguments_against.join(" ")).not.toMatch(
+      /\bRussian market\b|\bSource coverage\b/u,
+    );
+  });
 });

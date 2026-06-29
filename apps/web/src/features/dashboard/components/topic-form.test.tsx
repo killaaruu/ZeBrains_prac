@@ -29,7 +29,7 @@ describe("TopicForm", () => {
   it("shows a validation error when topic is empty", async () => {
     render(React.createElement(TopicForm));
 
-    await userEvent.click(screen.getByRole("button", { name: /generate report/i }));
+    await userEvent.click(screen.getByRole("button", { name: /сгенерировать отчёт/i }));
 
     expect(await screen.findByText(/at least 1 character/i)).toBeInTheDocument();
     expect(mockMutateAsync).not.toHaveBeenCalled();
@@ -40,8 +40,8 @@ describe("TopicForm", () => {
 
     render(React.createElement(TopicForm));
 
-    await userEvent.type(screen.getByLabelText(/research topic/i), "  Agentic coding  ");
-    await userEvent.click(screen.getByRole("button", { name: /generate report/i }));
+    await userEvent.type(screen.getByLabelText(/тема исследования/i), "  Agentic coding  ");
+    await userEvent.click(screen.getByRole("button", { name: /сгенерировать отчёт/i }));
 
     await waitFor(() => {
       expect(mockMutateAsync).toHaveBeenCalledWith({ topic: "Agentic coding" });
@@ -58,6 +58,6 @@ describe("TopicForm", () => {
 
     render(React.createElement(TopicForm));
 
-    expect(screen.getByRole("button", { name: /submitting/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /отправка/i })).toBeDisabled();
   });
 });

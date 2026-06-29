@@ -50,26 +50,52 @@ describe("validateEnv", () => {
     expect(result.REDIS_URL).toBe("redis://localhost:6379");
   });
 
-  it("should default the LLM pool to the 6 GB VRAM deployment profile", () => {
+  it("should default the LLM model to gpt-4o-mini", () => {
     const result = validateEnv(baseEnv);
-    expect(result.LLM_MODEL_POOL).toBe("qwen2.5:7b,gemma4:12b-it-qat");
+    expect(result.LLM_MODEL).toBe("gpt-4o-mini");
   });
 
-  it("should accept Ollama and Tavily agent runtime configuration", () => {
+  it("should default the LLM base URL to 302.ai", () => {
+    const result = validateEnv(baseEnv);
+    expect(result.LLM_BASE_URL).toBe("https://api.302.ai/v1");
+  });
+
+  it("should accept LLM provider and Tavily agent runtime configuration", () => {
     const result = validateEnv({
       ...baseEnv,
-      LLM_MODEL_POOL: "qwen2.5:14b,gemma4:12b",
-      OLLAMA_BASE_URL: "http://localhost:11434",
+      LLM_API_KEY: "sk-test-key",
+      LLM_BASE_URL: "https://custom.api.com/v1",
+      LLM_MODEL: "deepseek-chat,claude-3-haiku",
       TAVILY_API_KEY: "tvly-dev-example",
     });
 
-    expect(result.LLM_MODEL_POOL).toBe("qwen2.5:14b,gemma4:12b");
-    expect(result.OLLAMA_BASE_URL).toBe("http://localhost:11434");
+    expect(result.LLM_API_KEY).toBe("sk-test-key");
+    expect(result.LLM_BASE_URL).toBe("https://custom.api.com/v1");
+    expect(result.LLM_MODEL).toBe("deepseek-chat,claude-3-haiku");
     expect(result.TAVILY_API_KEY).toBe("tvly-dev-example");
   });
 
-  it("should reject an empty LLM model pool", () => {
-    expect(() => validateEnv({ ...baseEnv, LLM_MODEL_POOL: " , " })).toThrow("LLM_MODEL_POOL");
+  it("should map deprecated LLM_MODEL_POOL to the canonical LLM_MODEL", () => {
+    const result = validateEnv({
+      ...baseEnv,
+      LLM_MODEL_POOL: "qwen2.5:7b,gemma4:12b-it-qat",
+    });
+
+    expect(result.LLM_MODEL).toBe("qwen2.5:7b,gemma4:12b-it-qat");
+  });
+
+  it("should prefer LLM_MODEL over deprecated LLM_MODEL_POOL", () => {
+    const result = validateEnv({
+      ...baseEnv,
+      LLM_MODEL: "gpt-4o-mini,gpt-4o",
+      LLM_MODEL_POOL: "qwen2.5:7b,gemma4:12b-it-qat",
+    });
+
+    expect(result.LLM_MODEL).toBe("gpt-4o-mini,gpt-4o");
+  });
+
+  it("should reject an empty LLM model", () => {
+    expect(() => validateEnv({ ...baseEnv, LLM_MODEL: " , " })).toThrow("LLM_MODEL");
   });
 
   it("should pass through unknown variables via passthrough", () => {

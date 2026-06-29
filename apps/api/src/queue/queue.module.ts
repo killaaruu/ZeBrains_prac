@@ -4,8 +4,7 @@ import { BullBoardModule } from "@bull-board/nestjs";
 import { BullModule } from "@nestjs/bullmq";
 import { Logger, Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { ExampleProcessor } from "./example.processor";
-import { EXAMPLE_QUEUE, REPORT_GENERATION_QUEUE } from "./queue.constants";
+import { REPORT_GENERATION_QUEUE } from "./queue.constants";
 
 const logger = new Logger("QueueModule");
 
@@ -20,10 +19,7 @@ function parseRedisUrl(redisUrl: string) {
 }
 
 /**
- * BullMQ + Bull Board skeleton. The Bull Board dashboard is mounted at `/queues`.
- * Register your own queues with `BullModule.registerQueue` + `BullBoardModule.forFeature`
- * and add a matching `@Processor`. The `example` queue + ExampleProcessor are a
- * working reference — replace them with your product's queues.
+ * Product queue registration lives here. The Bull Board dashboard is mounted at `/queues`.
  */
 @Module({
   imports: [
@@ -37,12 +33,9 @@ function parseRedisUrl(redisUrl: string) {
         return { connection };
       },
     }),
-    BullModule.registerQueue({ name: EXAMPLE_QUEUE }),
     BullModule.registerQueue({ name: REPORT_GENERATION_QUEUE }),
     BullBoardModule.forRoot({ route: "/queues", adapter: ExpressAdapter }),
-    BullBoardModule.forFeature({ name: EXAMPLE_QUEUE, adapter: BullMQAdapter }),
     BullBoardModule.forFeature({ name: REPORT_GENERATION_QUEUE, adapter: BullMQAdapter }),
   ],
-  providers: [ExampleProcessor],
 })
 export class QueueModule {}

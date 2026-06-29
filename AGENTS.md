@@ -149,7 +149,7 @@ CPU offload — slower; the "< 2 min" target may not hold locally. The ≤13B an
 NOT this dev laptop.
 
 **k3s for this project runs on this same laptop (single node, 6 GB GPU)** — so
-the dev box IS the deploy target. Make `LLM_MODEL_POOL` env-driven:
+the dev box IS the deploy target. Make `LLM_MODEL` env-driven:
 - **Default (this 6 GB box):** primary `qwen2.5:7b` (~4.7 GB, fits VRAM → keeps
   the < 2 min target on the hot path), fallback `gemma4:12b-it-qat` (loaded only
   on primary failure; partial CPU offload acceptable there). Both ≤13B.
