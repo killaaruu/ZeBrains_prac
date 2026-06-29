@@ -1,7 +1,7 @@
 # Ollama subchart values — 6 GB single-node k3s defaults
 image: ollama/ollama:latest
 port: 11434
-# Default pool fits 6 GB VRAM — on >=16 GB switch via LLM_MODEL_POOL
+# Default pool fits 6 GB VRAM — on >=16 GB switch via LLM_MODEL
 modelPool:
   primary: qwen2.5:7b
   fallback: gemma4:12b-it-qat

@@ -1,6 +1,6 @@
-# Product Template
+# TrendScout
 
-A production-grade monorepo template for AI-first products. It ships the full engineering setup — backend, frontend, shared packages, local dev orchestration, CI/CD, and GitOps deployment — with **no product domain logic**. Start here, replace the `example` domain, and ship.
+A production-grade monorepo for TrendScout, an AI-first tech-trend research service. It ships the backend, frontend, shared packages, local dev orchestration, CI/CD, and deployment paths for generating structured market reports with verifiable sources.
 
 ## Overview
 
