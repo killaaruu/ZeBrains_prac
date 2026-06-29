@@ -30,6 +30,21 @@ describe("ConfigDrawer", () => {
     }));
   });
 
+  it("does not emit the Radix missing description warning when opened", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderConfigDrawer();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open theme settings" }));
+
+    expect(errorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.",
+      ),
+    );
+
+    errorSpy.mockRestore();
+  });
+
   it("does not render theme selection controls", () => {
     renderConfigDrawer();
 
