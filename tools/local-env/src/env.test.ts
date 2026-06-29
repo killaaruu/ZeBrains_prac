@@ -29,7 +29,7 @@ describe("buildRuntimeEnv", () => {
     expect(env.web.VITE_WEB_PORT).toBe("4173");
     expect(env.web.VITE_SUPABASE_URL).toBe("https://local-dev-placeholder.supabase.co");
     expect(env.web.VITE_SUPABASE_PUBLISHABLE_KEY).toBe("sb_publishable_local_dev_placeholder");
-    // No real Supabase → local-dev auth bypass is enabled for API + web.
+    // No real Supabase → local-dev auth bypass is enabled for API + worker + web flows.
     expect(env.api.LOCAL_DEV_AUTH_ENABLED).toBe("true");
     expect(env.web.VITE_LOCAL_DEV_AUTH_ENABLED).toBe("true");
     expect(env.compose.POSTGRES_PORT).toBe("45432");

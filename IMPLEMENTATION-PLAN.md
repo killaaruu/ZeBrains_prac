@@ -34,7 +34,7 @@ ollama pull qwen2.5:7b            # ~4.7 ГБ — основная, влезае
 ollama pull gemma4:12b-it-qat     # ~7 ГБ — резервная (грузится при сбое)
 ollama list                       # проверить
 ```
-Пул задаётся в `apps/api/.env` → `LLM_MODEL_POOL=qwen2.5:7b,gemma4:12b-it-qat`.
+Пул задаётся в `apps/api/.env` → `LLM_MODEL=qwen2.5:7b,gemma4:12b-it-qat`.
 
 ### Vercel (фронт, для M6 / issue #31)
 1. Аккаунт на vercel.com → New Project → импортировать этот репо, root = `apps/web`.

@@ -1,5 +1,5 @@
 # ==============================================================================
-# Product Template — single entry point for all repo commands.
+# TrendScout — single entry point for all repo commands.
 #
 #   make            → list every target (same as `make help`)
 #   make <target>   → run it; each target prints a status line
@@ -28,7 +28,7 @@ CMD ?=
 # ----- Help -------------------------------------------------------------------
 
 help: ## 📖  List all available targets
-	@printf "\n🛠️   \033[1mProduct Template make targets\033[0m\n\n"
+	@printf "\n🛠️   \033[1mTrendScout make targets\033[0m\n\n"
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| sort \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
