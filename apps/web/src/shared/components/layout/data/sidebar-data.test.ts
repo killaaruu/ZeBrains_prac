@@ -10,9 +10,6 @@ describe("sidebarData", () => {
       expect.objectContaining({ title: "Dashboard", url: "/dashboard" }),
     );
     expect(general?.items).toContainEqual(
-      expect.objectContaining({ title: "Example CRUD", url: "/example" }),
-    );
-    expect(general?.items).toContainEqual(
       expect.objectContaining({ title: "Health", url: "/health" }),
     );
   });
@@ -29,6 +26,14 @@ describe("sidebarData", () => {
     );
 
     expect(productionTitles).not.toContain("Example CRUD");
+  });
+
+  it("keeps template example navigation out of the default sidebar data", () => {
+    const defaultTitles = sidebarData.navGroups.flatMap((group) =>
+      group.items.map((item) => item.title),
+    );
+
+    expect(defaultTitles).not.toContain("Example CRUD");
   });
 
   it("uses TrendScout product metadata instead of template placeholders", () => {
